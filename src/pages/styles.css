@@ -172,6 +172,128 @@ code {
   border-color: var(--primary);
 }
 
+.btn-install {
+  background: var(--primary-soft);
+  border-color: rgba(2, 132, 199, 0.36);
+  color: var(--primary);
+}
+
+.btn-install:hover {
+  filter: brightness(0.97);
+  border-color: var(--primary);
+}
+
+.btn-install-ready {
+  background: linear-gradient(135deg, #0284c7, #0d9488);
+  border-color: transparent;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25);
+}
+
+.btn-install-ready:hover {
+  filter: brightness(1.06);
+}
+
+[data-theme="dark"] .btn-install-ready {
+  color: #ffffff;
+}
+
+/* ================= PWA INSTALL GUIDE MODAL ================= */
+.pwa-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+}
+
+.pwa-modal-dialog {
+  width: 100%;
+  max-width: 520px;
+  background: var(--bg-card);
+  color: var(--text-main);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.pwa-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-subtle);
+}
+
+.pwa-modal-header h2 {
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.pwa-modal-close {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-muted);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pwa-modal-close:hover {
+  color: var(--text-main);
+  border-color: var(--primary);
+}
+
+.pwa-modal-body {
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 13.8px;
+  color: var(--text-muted);
+}
+
+.pwa-guide-intro {
+  color: var(--text-main);
+}
+
+.pwa-guide-warn {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(245, 158, 11, 0.14);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: var(--text-main);
+  font-size: 13px;
+}
+
+.pwa-guide-list {
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pwa-guide-list strong {
+  color: var(--text-main);
+}
+
+.pwa-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 20px 16px;
+  border-top: 1px solid var(--border);
+}
+
 /* ================= HERO & SUMMARY ================= */
 .main-content {
   flex: 1;

@@ -1,0 +1,135 @@
+{
+  "id": "./",
+  "name": "Cổng Ôn Tập Cao Học KHYS SĐH 2026 – YDS",
+  "short_name": "KHYS YDS 2026",
+  "description": "Cổng ôn tập đa môn Tuyển sinh Sau đại học – Cao học Khoa học Y sinh ĐH Y Dược TP.HCM (YDS) 2026: 7 môn học, 61 bài, mô phỏng 3D WebGL & 1.464 câu KSA.",
+  "lang": "vi",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "theme_color": "#0f172a",
+  "background_color": "#0f172a",
+  "categories": ["education", "medical"],
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Sinh lý học Y khoa (17 bài)",
+      "short_name": "Sinh lý",
+      "description": "17 chuyên đề • Mô phỏng • 408 câu KSA",
+      "url": "./sinh-ly/",
+      "icons": [
+        {
+          "src": "icons/shortcut-sinh-ly.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Giải phẫu học 3D (7 bài)",
+      "short_name": "Giải phẫu 3D",
+      "description": "7 mô hình WebGL 3D • Atlas • 168 câu KSA",
+      "url": "./giai-phau/",
+      "icons": [
+        {
+          "src": "icons/shortcut-giai-phau.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Mô học đại cương (8 bài)",
+      "short_name": "Mô học",
+      "description": "Atlas 61 hình H&E • 192 câu KSA",
+      "url": "./mo-hoc/",
+      "icons": [
+        {
+          "src": "icons/shortcut-mo-hoc.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Giải phẫu bệnh (8 bài)",
+      "short_name": "Giải phẫu bệnh",
+      "description": "Atlas 35 hình • TNM & Sinh ung • 192 câu KSA",
+      "url": "./giai-phau-benh/",
+      "icons": [
+        {
+          "src": "icons/shortcut-giai-phau-benh.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Sinh lý bệnh – Miễn dịch (6 bài)",
+      "short_name": "SLB – Miễn dịch",
+      "description": "Atlas 19 hình & sơ đồ • 144 câu KSA",
+      "url": "./sinh-ly-benh-mien-dich/",
+      "icons": [
+        {
+          "src": "icons/shortcut-sinh-ly-benh-mien-dich.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Vi sinh Y học (7 bài)",
+      "short_name": "Vi sinh",
+      "description": "7 hoạt cảnh SVG • 7 Labs • 168 câu KSA",
+      "url": "./vi-sinh/",
+      "icons": [
+        {
+          "src": "icons/shortcut-vi-sinh.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Ký sinh trùng Y học (8 bài)",
+      "short_name": "Ký sinh trùng",
+      "description": "Hình động SGK • 8 Labs • 192 câu KSA",
+      "url": "./ky-sinh-trung/",
+      "icons": [
+        {
+          "src": "icons/shortcut-ky-sinh-trung.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ]
+}

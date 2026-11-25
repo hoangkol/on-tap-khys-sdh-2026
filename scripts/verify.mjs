@@ -58,7 +58,49 @@ function checkModuleImageAssets(moduleDir) {
   return assetCount;
 }
 
-async function runHttpChecks(rootDir, subjects) {
+function checkPwaSetup(subjects) {
+  const manifestPath = path.join(srcPagesDir, 'manifest.webmanifest');
+  assert.ok(fs.existsSync(manifestPath), 'Missing src/pages/manifest.webmanifest');
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+
+  assert.equal(manifest.display, 'standalone', 'Manifest display must be standalone');
+  assert.equal(manifest.start_url, './', 'Manifest start_url must be ./ for subpath portability');
+  assert.equal(manifest.scope, './', 'Manifest scope must be ./ for subpath portability');
+  assert.equal(manifest.id, './', 'Manifest id must be ./');
+  assert.ok(Array.isArray(manifest.icons) && manifest.icons.length >= 4, 'Manifest must define any and maskable icons');
+
+  const has192Any = manifest.icons.some((i) => i.sizes === '192x192' && i.purpose === 'any');
+  const has512Any = manifest.icons.some((i) => i.sizes === '512x512' && i.purpose === 'any');
+  const has192Mask = manifest.icons.some((i) => i.sizes === '192x192' && i.purpose === 'maskable');
+  const has512Mask = manifest.icons.some((i) => i.sizes === '512x512' && i.purpose === 'maskable');
+  assert.ok(has192Any && has512Any, 'Manifest must include 192x192 and 512x512 purpose=any PNG icons');
+  assert.ok(has192Mask && has512Mask, 'Manifest must include 192x192 and 512x512 purpose=maskable PNG icons');
+
+  for (const icon of manifest.icons) {
+    const iconFile = path.resolve(srcPagesDir, icon.src);
+    assert.ok(fs.existsSync(iconFile), `Missing manifest icon ${icon.src}`);
+  }
+
+  assert.ok(Array.isArray(manifest.shortcuts) && manifest.shortcuts.length === subjects.length, 'Manifest shortcuts should cover all 7 subjects');
+  for (const sc of manifest.shortcuts) {
+    const targetDir = path.resolve(srcPagesDir, sc.url);
+    assert.ok(fs.existsSync(path.join(targetDir, 'index.html')), `Shortcut target missing: ${sc.url}`);
+    for (const ic of sc.icons || []) {
+      assert.ok(fs.existsSync(path.resolve(srcPagesDir, ic.src)), `Missing shortcut icon: ${ic.src}`);
+    }
+  }
+
+  const swPath = path.join(srcPagesDir, 'sw.js');
+  const pwaJsPath = path.join(srcPagesDir, 'shared', 'pwa.js');
+  assert.ok(fs.existsSync(swPath), 'Missing src/pages/sw.js');
+  assert.ok(fs.existsSync(pwaJsPath), 'Missing src/pages/shared/pwa.js');
+  new vm.Script(fs.readFileSync(swPath, 'utf8'), { filename: 'sw.js' });
+  new vm.Script(fs.readFileSync(pwaJsPath, 'utf8'), { filename: 'pwa.js' });
+
+  return manifest;
+}
+
+async function runHttpChecks(rootDir, subjects, manifest) {
   const server = createPortalServer({ rootDir });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const addr = server.address();
@@ -69,6 +111,26 @@ async function runHttpChecks(rootDir, subjects) {
     assert.equal(homeRes.status, 200, 'GET / should return 200');
     const homeHtml = await homeRes.text();
     assert.ok(homeHtml.includes('shared/portal-config.js'), 'Home page should load shared/portal-config.js');
+    assert.ok(homeHtml.includes('./manifest.webmanifest'), 'Home page should link manifest.webmanifest');
+    assert.ok(homeHtml.includes('./shared/pwa.js'), 'Home page should load shared/pwa.js');
+
+    const manifestRes = await fetch(`${baseUrl}/manifest.webmanifest`);
+    assert.equal(manifestRes.status, 200, 'GET /manifest.webmanifest should return 200');
+    assert.ok(
+      (manifestRes.headers.get('content-type') || '').includes('application/manifest+json'),
+      'Manifest must be served as application/manifest+json'
+    );
+
+    const swRes = await fetch(`${baseUrl}/sw.js`);
+    assert.equal(swRes.status, 200, 'GET /sw.js should return 200');
+
+    const pwaJsRes = await fetch(`${baseUrl}/shared/pwa.js`);
+    assert.equal(pwaJsRes.status, 200, 'GET /shared/pwa.js should return 200');
+
+    for (const icon of manifest.icons) {
+      const iconRes = await fetch(`${baseUrl}/${icon.src}`);
+      assert.equal(iconRes.status, 200, `GET /${icon.src} should return 200`);
+    }
 
     for (const s of subjects) {
       const noSlash = await fetch(`${baseUrl}/${s.slug}`, { redirect: 'manual' });
@@ -79,6 +141,8 @@ async function runHttpChecks(rootDir, subjects) {
       assert.equal(modRes.status, 200, `GET /${s.slug}/ should return 200`);
       const modHtml = await modRes.text();
       assert.ok(modHtml.includes('../shared/portal-nav.css'), `${s.slug} should include portal-nav.css`);
+      assert.ok(modHtml.includes('../manifest.webmanifest'), `${s.slug} should link ../manifest.webmanifest`);
+      assert.ok(modHtml.includes('../shared/pwa.js'), `${s.slug} should load ../shared/pwa.js`);
       assert.ok(modHtml.includes('href="../"'), `${s.slug} should link back to ../`);
 
       const cssRes = await fetch(`${baseUrl}/${s.slug}/styles.css`);
@@ -134,9 +198,13 @@ async function main() {
   assert.equal(pathoSnap.completedLessons, 1);
   assert.equal(pathoSnap.answeredQuestions, 3);
 
-  // Verify root homepage references
+  // Verify root homepage references & PWA manifest/service worker
   const homeRefs = checkLocalHtmlReferences(path.join(srcPagesDir, 'index.html'), srcPagesDir);
   assert.ok(homeRefs.includes('./shared/portal-config.js'));
+  assert.ok(homeRefs.includes('./manifest.webmanifest'));
+  assert.ok(homeRefs.includes('./shared/pwa.js'));
+  assert.ok(homeRefs.includes('./icons/apple-touch-icon.png'));
+  const manifest = checkPwaSetup(PORTAL_SUBJECTS);
 
   // Verify each module's references, assets, and portal return navigation
   let totalAssetsChecked = 0;
@@ -148,6 +216,9 @@ async function main() {
 
     const refs = checkLocalHtmlReferences(modIndex, modDir);
     assert.ok(refs.includes('../shared/portal-nav.css'), `${s.slug} missing portal-nav.css link`);
+    assert.ok(refs.includes('../manifest.webmanifest'), `${s.slug} missing ../manifest.webmanifest link`);
+    assert.ok(refs.includes('../shared/pwa.js'), `${s.slug} missing ../shared/pwa.js script`);
+    assert.ok(refs.includes('../icons/apple-touch-icon.png'), `${s.slug} missing apple-touch-icon link`);
     assert.ok(refs.includes('../'), `${s.slug} missing ../ return link`);
     totalAssetsChecked += checkModuleImageAssets(modDir);
   }
@@ -155,8 +226,8 @@ async function main() {
   // Build dist/ and verify both src/pages and dist over HTTP
   const buildInfo = buildPortal();
   assert.ok(fs.existsSync(path.join(buildInfo.distDir, '.nojekyll')), 'dist/.nojekyll missing');
-  await runHttpChecks(srcPagesDir, PORTAL_SUBJECTS);
-  await runHttpChecks(buildInfo.distDir, PORTAL_SUBJECTS);
+  await runHttpChecks(srcPagesDir, PORTAL_SUBJECTS, manifest);
+  await runHttpChecks(buildInfo.distDir, PORTAL_SUBJECTS, manifest);
 
   console.log(
     `ALL VERIFICATIONS PASSED: ${PORTAL_SUBJECTS.length} subjects, ${totalAssetsChecked} image asset refs checked, dist built (${buildInfo.fileCount} files, ${buildInfo.totalMB} MB), HTTP routes verified on both src/pages and dist.`
