@@ -203,35 +203,10 @@
               <span>Vào học môn này</span>
               <span aria-hidden="true">→</span>
             </a>
-            <a
-              class="btn-backup"
-              href="${escapeHtml(subject.backupRepoUrl)}"
-              target="_blank"
-              rel="noopener noreferrer"
-              title="Mở repo dự phòng ${escapeHtml(subject.backupRepoName)} trên GitHub"
-            >
-              Dự phòng ↗
-            </a>
           </div>
         </article>
       `;
     }).join('');
-  }
-
-  function renderBackups() {
-    const list = document.getElementById('backupList');
-    if (!list) return;
-    list.innerHTML = SUBJECTS.map((subject) => `
-      <div class="backup-item">
-        <div class="backup-item-main">
-          <div class="backup-item-name">${escapeHtml(subject.name)}</div>
-          <div class="backup-item-route">src/pages/${escapeHtml(subject.slug)}/ → ${escapeHtml(subject.route)}</div>
-        </div>
-        <a href="${escapeHtml(subject.backupRepoUrl)}" target="_blank" rel="noopener noreferrer">
-          GitHub gốc ↗
-        </a>
-      </div>
-    `).join('');
   }
 
   function bindEvents() {
@@ -287,7 +262,6 @@
     const savedTheme = safeGetStorage(META.portalThemeKey) || 'light';
     applyTheme(savedTheme);
     renderCards();
-    renderBackups();
     bindEvents();
   }
 
