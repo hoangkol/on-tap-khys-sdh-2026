@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="description" content="Cổng ôn tập tổng hợp đa môn Tuyển sinh Sau đại học – Cao học Khoa học Y sinh (KHYS) ĐH Y Dược TP.HCM (YDS) 2026: Sinh lý học, Giải phẫu học 3D, Mô học, Giải phẫu bệnh, Sinh lý bệnh – Miễn dịch, Vi sinh, Ký sinh trùng." />
+  <title>Cổng Ôn Tập Cao Học KHYS SĐH 2026 – ĐH Y Dược TP.HCM (YDS)</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%230f172a'/%3E%3Cpath d='M18 22h28M18 32h28M18 42h18' stroke='%2338bdf8' stroke-width='4.5' stroke-linecap='round'/%3E%3Ccircle cx='46' cy='42' r='5' fill='%2310b981'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="portal-header">
+    <div class="portal-shell header-inner">
+      <div class="brand-lockup">
+        <span class="brand-pill">Đề cương SĐH 2026 • KHYS YDS</span>
+        <div class="brand-sub">Cổng ôn tập tổng hợp 7 môn • Multi-page Route Portal</div>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-outline" id="btnSyncTheme" type="button" title="Áp dụng chế độ Sáng/Tối hiện tại cho toàn bộ 7 môn">
+          🎨 <span class="hide-xs">Đồng bộ theme 7 môn</span>
+        </button>
+        <button class="btn btn-outline" id="btnThemeToggle" type="button" title="Đổi giao diện Sáng / Tối">
+          🌙 <span class="hide-xs">Giao diện tối</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="portal-shell main-content">
+    <section class="hero-card" aria-labelledby="portalTitle">
+      <div class="hero-copy">
+        <p class="hero-kicker">Tuyển sinh Sau đại học • Đại học Y Dược TP.HCM (UMP / YDS)</p>
+        <h1 id="portalTitle">Menu Ôn Tập Cao Học Khoa Học Y Sinh 2026</h1>
+        <p class="hero-desc">
+          Chọn môn học bên dưới để đi thẳng vào module chuyên sâu (<code>/sinh-ly/</code>, <code>/giai-phau/</code>, <code>/mo-hoc/</code>, <code>/giai-phau-benh/</code>, <code>/sinh-ly-benh-mien-dich/</code>, <code>/vi-sinh/</code>, <code>/ky-sinh-trung/</code>). Tiến độ làm bài của từng môn được lưu cục bộ trên trình duyệt thiết bị này.
+        </p>
+      </div>
+
+      <div class="summary-grid" aria-label="Thống kê tổng hợp toàn cổng">
+        <div class="stat-box">
+          <div class="stat-label">Môn học tích hợp</div>
+          <div class="stat-value" id="statTotalSubjects">7 môn</div>
+          <div class="stat-meta">1 Môn cơ sở • 6 Chuyên ngành</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Tổng bài học &amp; câu KSA</div>
+          <div class="stat-value" id="statTotalCurriculum">61 bài • 1.464 câu</div>
+          <div class="stat-meta">Kèm 3D, Atlas &amp; Phòng thi thử</div>
+        </div>
+        <div class="stat-box stat-box-progress">
+          <div class="stat-label">Tiến độ hoàn thành trên thiết bị</div>
+          <div class="stat-value" id="statCompletedLessons">0 / 61 bài (0%)</div>
+          <div class="overall-track" aria-hidden="true">
+            <div class="overall-fill" id="statOverallFill"></div>
+          </div>
+          <div class="stat-meta" id="statAnsweredQuestions">0 / 1.464 câu trắc nghiệm đã trả lời</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="toolbar" aria-label="Tìm kiếm và lọc môn học">
+      <div class="search-box">
+        <label class="sr-only" for="subjectSearchInput">Tìm kiếm môn học hoặc nội dung ôn tập</label>
+        <input
+          id="subjectSearchInput"
+          type="search"
+          placeholder="🔍 Tìm nhanh môn học, từ khóa (VD: tim mạch, 3D, mô xương, hoại tử, kháng sinh, miễn dịch)..."
+          autocomplete="off"
+        />
+      </div>
+      <div class="filter-pills" role="tablist" aria-label="Lọc nhóm môn học">
+        <button type="button" class="filter-pill active" data-filter="all">Tất cả (7)</button>
+        <button type="button" class="filter-pill" data-filter="co-so">Môn cơ sở (1)</button>
+        <button type="button" class="filter-pill" data-filter="chuyen-nganh">Chuyên ngành KHYS (6)</button>
+        <button type="button" class="filter-pill" data-filter="in-progress">Đang học dở (<span id="inProgressCount">0</span>)</button>
+      </div>
+    </section>
+
+    <section aria-label="Danh sách các module môn học">
+      <div class="subjects-grid" id="subjectsGrid">
+        <!-- Populated by app.js -->
+      </div>
+      <div class="empty-state hidden" id="emptyState">
+        Không tìm thấy môn học phù hợp với từ khóa hoặc bộ lọc hiện tại.
+        <button type="button" class="btn btn-outline" id="btnResetFilters">Xóa bộ lọc</button>
+      </div>
+    </section>
+
+    <section class="backup-panel" aria-labelledby="backupTitle">
+      <div class="backup-header">
+        <div>
+          <h2 id="backupTitle">Kiến trúc Multi-page &amp; Kho lưu trữ dự phòng</h2>
+          <p>
+            Mỗi môn là một thư mục độc lập trong <code>src/pages/&lt;mon&gt;/</code> để dễ bảo trì từng phần. Toàn bộ 7 repository gốc trên GitHub vẫn được giữ nguyên làm bản dự phòng.
+          </p>
+        </div>
+        <span class="backup-badge">💾 localStorage giữ nguyên theo từng môn</span>
+      </div>
+      <div class="backup-list" id="backupList">
+        <!-- Populated by app.js -->
+      </div>
+    </section>
+  </main>
+
+  <footer class="portal-footer">
+    <div class="portal-shell footer-inner">
+      <span>Cổng Ôn Tập Cao Học Khoa Học Y Sinh (KHYS) • ĐH Y Dược TP.HCM 2026</span>
+      <span>Chế độ lưu trữ: Cục bộ trên trình duyệt thiết bị (không đồng bộ máy chủ)</span>
+    </div>
+  </footer>
+
+  <script src="./shared/portal-config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
