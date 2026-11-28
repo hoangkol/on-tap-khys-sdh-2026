@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Logo Cổng Ôn Tập KHYS 2026">
+  <defs>
+    <linearGradient id="khysBg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#091224" />
+      <stop offset="55%" stop-color="#0c4a6e" />
+      <stop offset="100%" stop-color="#0f766e" />
+    </linearGradient>
+    <radialGradient id="khysGlow" cx="0.35" cy="0.28" r="0.65">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.32" />
+      <stop offset="65%" stop-color="#10b981" stop-opacity="0.10" />
+      <stop offset="100%" stop-color="#091224" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="dnaCyan" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#7dd3fc" />
+      <stop offset="100%" stop-color="#38bdf8" />
+    </linearGradient>
+    <linearGradient id="dnaEmerald" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#6ee7b7" />
+      <stop offset="100%" stop-color="#10b981" />
+    </linearGradient>
+    <linearGradient id="pillBg" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#082f49" />
+      <stop offset="100%" stop-color="#064e3b" />
+    </linearGradient>
+  </defs>
+
+  <!-- Outer rounded badge -->
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="url(#khysBg)" />
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="url(#khysGlow)" />
+  <rect x="6" y="6" width="116" height="116" rx="26" fill="none" stroke="#38bdf8" stroke-opacity="0.45" stroke-width="2" />
+
+  <!-- Subtle Medical Cross Watermark -->
+  <path d="M55 20h18v18h18v18H73v18H55V56H37V38h18z" fill="#e0f2fe" fill-opacity="0.13" />
+
+  <!-- DNA Double Helix (Vertical Core) -->
+  <!-- Base pair rungs -->
+  <g stroke="#bae6fd" stroke-width="2.6" stroke-linecap="round" opacity="0.88">
+    <line x1="48" y1="24" x2="80" y2="24" />
+    <line x1="53" y1="33" x2="75" y2="33" />
+    <line x1="53" y1="53" x2="75" y2="53" />
+    <line x1="48" y1="62" x2="80" y2="62" />
+    <line x1="53" y1="71" x2="75" y2="71" />
+  </g>
+
+  <!-- DNA Strand 1 (Cyan) -->
+  <path
+    d="M46 18 C46 31, 82 35, 82 47 C82 59, 46 63, 46 77"
+    fill="none"
+    stroke="url(#dnaCyan)"
+    stroke-width="6.5"
+    stroke-linecap="round"
+  />
+  <!-- DNA Strand 2 (Emerald) -->
+  <path
+    d="M82 18 C82 31, 46 35, 46 47 C46 59, 82 63, 82 77"
+    fill="none"
+    stroke="url(#dnaEmerald)"
+    stroke-width="6.5"
+    stroke-linecap="round"
+  />
+
+  <!-- Crisp Medical Cross Badge (Top Right) -->
+  <g transform="translate(88, 16)">
+    <circle cx="10" cy="10" r="11" fill="#0f172a" stroke="#34d399" stroke-width="2" />
+    <path d="M10 4.5v11M4.5 10h11" stroke="#34d399" stroke-width="3.2" stroke-linecap="round" />
+  </g>
+
+  <!-- Dynamic ECG Pulse Overlay -->
+  <path
+    d="M16 48 H37 L44 35 L52 60 L60 27 L67 55 L74 44 L80 48 H112"
+    fill="none"
+    stroke="#091224"
+    stroke-opacity="0.55"
+    stroke-width="7"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M16 48 H37 L44 35 L52 60 L60 27 L67 55 L74 44 L80 48 H112"
+    fill="none"
+    stroke="#ffffff"
+    stroke-width="3.8"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <circle cx="112" cy="48" r="3.6" fill="#34d399" />
+
+  <!-- KHYS 2026 Wordmark Pill -->
+  <rect x="18" y="86" width="92" height="25" rx="12.5" fill="url(#pillBg)" stroke="#38bdf8" stroke-opacity="0.5" stroke-width="1.5" />
+  <text
+    x="64"
+    y="103"
+    text-anchor="middle"
+    font-family="Segoe UI, Inter, Arial, sans-serif"
+    font-size="14.5"
+    font-weight="800"
+    letter-spacing="0.9"
+    fill="#f8fafc"
+  >KHYS 2026</text>
+</svg>

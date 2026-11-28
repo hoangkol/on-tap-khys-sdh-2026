@@ -4,7 +4,7 @@
 // ==========================================================================
 
 const CACHE_PREFIX = 'khys-yds-2026-';
-const CACHE_NAME = `${CACHE_PREFIX}v1`;
+const CACHE_NAME = `${CACHE_PREFIX}v2`;
 const SCOPE_URL = self.registration.scope;
 
 const CORE_ASSETS = [
@@ -16,6 +16,7 @@ const CORE_ASSETS = [
   './shared/portal-config.js',
   './shared/portal-nav.css',
   './shared/pwa.js',
+  './icons/logo.svg',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/apple-touch-icon.png'

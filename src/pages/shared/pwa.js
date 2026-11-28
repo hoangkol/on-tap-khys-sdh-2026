@@ -202,8 +202,143 @@
     }
   }
 
+  const ACTIVITY_KEY = 'yds_portal_activity_v1';
+  const SUBJECT_KEY_MAP = {
+    yds_physio_2026_progress: { slug: 'sinh-ly', schema: 'v1' },
+    yds_anat_2026_progress: { slug: 'giai-phau', schema: 'v1' },
+    yds_histo_2026_progress: { slug: 'mo-hoc', schema: 'v1' },
+    yds_patho_2026_progress: { slug: 'giai-phau-benh', schema: 'v2' },
+    yds_slb_md_2026_progress: { slug: 'sinh-ly-benh-mien-dich', schema: 'v2' },
+    yds_micro_2026_progress: { slug: 'vi-sinh', schema: 'v1' },
+    yds_parasit_2026_progress: { slug: 'ky-sinh-trung', schema: 'v1' }
+  };
+
+  function getTodayKey() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+
+  function summarizeProgressRaw(raw, schema) {
+    if (!raw) return { answered: 0, correct: 0 };
+    try {
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') return { answered: 0, correct: 0 };
+      let answered = 0;
+      let correct = 0;
+      if (schema === 'v2') {
+        const completed = parsed.completedLessons || {};
+        const answers = parsed.answers || {};
+        Object.keys(answers).forEach((id) => {
+          const cnt = Object.keys(answers[id] || {}).length;
+          answered += cnt;
+          if (cnt > 0) {
+            const best = Number((completed[id] && completed[id].bestScore) || 0);
+            correct += Math.min(cnt, Math.max(0, best));
+          }
+        });
+      } else {
+        Object.keys(parsed).forEach((id) => {
+          const entry = parsed[id];
+          if (!entry || typeof entry !== 'object') return;
+          const cnt = Object.keys(entry.answered || {}).length;
+          answered += cnt;
+          correct += Math.min(cnt, Math.max(0, Number(entry.score || 0)));
+        });
+      }
+      return { answered, correct };
+    } catch (e) {
+      return { answered: 0, correct: 0 };
+    }
+  }
+
+  function initActivityTracker() {
+    if (window.__khysActivityHooked) return;
+    window.__khysActivityHooked = true;
+
+    let nativeSetItem;
+    let nativeGetItem;
+    try {
+      nativeSetItem = Storage.prototype.setItem;
+      nativeGetItem = Storage.prototype.getItem;
+    } catch (e) {
+      return;
+    }
+
+    function loadActivity() {
+      try {
+        const raw = nativeGetItem.call(window.localStorage, ACTIVITY_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === 'object') {
+            return {
+              days: parsed.days && typeof parsed.days === 'object' ? parsed.days : {},
+              dailyGoal: Number(parsed.dailyGoal || 20),
+              lastSnapshots: parsed.lastSnapshots && typeof parsed.lastSnapshots === 'object' ? parsed.lastSnapshots : {}
+            };
+          }
+        }
+      } catch (e) {}
+      return { days: {}, dailyGoal: 20, lastSnapshots: {} };
+    }
+
+    function saveActivity(act) {
+      try {
+        nativeSetItem.call(window.localStorage, ACTIVITY_KEY, JSON.stringify(act));
+      } catch (e) {}
+    }
+
+    // Seed baseline snapshots for pre-existing progress without attributing old answers to today
+    try {
+      const act = loadActivity();
+      let changed = false;
+      Object.keys(SUBJECT_KEY_MAP).forEach((storageKey) => {
+        const meta = SUBJECT_KEY_MAP[storageKey];
+        if (!act.lastSnapshots[meta.slug]) {
+          const raw = nativeGetItem.call(window.localStorage, storageKey);
+          act.lastSnapshots[meta.slug] = summarizeProgressRaw(raw, meta.schema);
+          changed = true;
+        }
+      });
+      if (changed) saveActivity(act);
+    } catch (e) {}
+
+    Storage.prototype.setItem = function (key, value) {
+      nativeSetItem.call(this, key, value);
+      try {
+        if (this !== window.localStorage) return;
+        const meta = SUBJECT_KEY_MAP[key];
+        if (!meta) return;
+
+        const nextSnap = summarizeProgressRaw(String(value || ''), meta.schema);
+        const act = loadActivity();
+        const prevSnap = act.lastSnapshots[meta.slug] || { answered: 0, correct: 0 };
+        const deltaAnswered = nextSnap.answered - Number(prevSnap.answered || 0);
+        const deltaCorrect = Math.max(0, nextSnap.correct - Number(prevSnap.correct || 0));
+
+        if (deltaAnswered > 0) {
+          const today = getTodayKey();
+          if (!act.days[today]) {
+            act.days[today] = { answered: 0, correct: 0, subjects: {} };
+          }
+          act.days[today].answered = Number(act.days[today].answered || 0) + deltaAnswered;
+          act.days[today].correct = Number(act.days[today].correct || 0) + Math.min(deltaAnswered, deltaCorrect);
+          if (!act.days[today].subjects || typeof act.days[today].subjects !== 'object') {
+            act.days[today].subjects = {};
+          }
+          act.days[today].subjects[meta.slug] = Number(act.days[today].subjects[meta.slug] || 0) + deltaAnswered;
+        }
+
+        act.lastSnapshots[meta.slug] = nextSnap;
+        saveActivity(act);
+      } catch (e) {
+        // Never interfere with module storage writes
+      }
+    };
+  }
+
   registerServiceWorker();
   applyStandaloneFlag();
+  initActivityTracker();
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initInstallUi);

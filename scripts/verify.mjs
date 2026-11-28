@@ -163,7 +163,12 @@ async function runHttpChecks(rootDir, subjects, manifest) {
 }
 
 async function main() {
-  const { PORTAL_SUBJECTS, readSubjectProgress } = loadPortalConfig();
+  const {
+    PORTAL_SUBJECTS,
+    readSubjectProgress,
+    readPortalActivity,
+    computeStreakStats
+  } = loadPortalConfig();
 
   // Check unique storage keys & routes
   const storageKeys = new Set();
@@ -175,28 +180,49 @@ async function main() {
     slugs.add(s.slug);
   }
 
-  // Test progress reader for both v1 and v2 schemas
+  // Test progress reader & streak analytics for both v1 and v2 schemas
   const mockStore = {
+    data: {
+      yds_physio_2026_progress: JSON.stringify({ 1: { answered: { 0: 1, 1: 2 }, score: 1, total: 4 } }),
+      yds_patho_2026_progress: JSON.stringify({
+        answers: { 1: { 0: 1, 1: 0, 2: 3 } },
+        completedLessons: { 1: { bestScore: 20, total: 24 } }
+      }),
+      yds_portal_activity_v1: JSON.stringify({
+        dailyGoal: 20,
+        days: {
+          '2026-11-26': { answered: 12, correct: 10 },
+          '2026-11-27': { answered: 18, correct: 15 },
+          '2026-11-28': { answered: 15, correct: 12 }
+        }
+      })
+    },
     getItem(key) {
-      if (key === 'yds_physio_2026_progress') {
-        return JSON.stringify({ 1: { answered: { 0: 1, 1: 2 }, total: 4 } });
-      }
-      if (key === 'yds_patho_2026_progress') {
-        return JSON.stringify({
-          answers: { 1: { 0: 1, 1: 0, 2: 3 } },
-          completedLessons: { 1: { bestScore: 20, total: 24 } }
-        });
-      }
-      return null;
+      return Object.prototype.hasOwnProperty.call(this.data, key) ? this.data[key] : null;
+    },
+    setItem(key, val) {
+      this.data[key] = String(val);
     }
   };
   const physioSnap = readSubjectProgress(PORTAL_SUBJECTS.find((s) => s.slug === 'sinh-ly'), mockStore);
   assert.equal(physioSnap.completedLessons, 1);
   assert.equal(physioSnap.answeredQuestions, 2);
+  assert.equal(physioSnap.correctQuestions, 1);
+  assert.equal(physioSnap.accuracy, 50);
 
   const pathoSnap = readSubjectProgress(PORTAL_SUBJECTS.find((s) => s.slug === 'giai-phau-benh'), mockStore);
   assert.equal(pathoSnap.completedLessons, 1);
   assert.equal(pathoSnap.answeredQuestions, 3);
+  assert.equal(pathoSnap.correctQuestions, 3);
+  assert.equal(pathoSnap.accuracy, 100);
+  assert.equal(pathoSnap.masteredLessons, 1);
+
+  const activity = readPortalActivity(mockStore);
+  const streak = computeStreakStats(activity, '2026-11-28');
+  assert.equal(streak.currentStreak, 3);
+  assert.equal(streak.bestStreak, 3);
+  assert.equal(streak.todayAnswered, 15);
+  assert.equal(streak.last7Days.length, 7);
 
   // Verify root homepage references & PWA manifest/service worker
   const homeRefs = checkLocalHtmlReferences(path.join(srcPagesDir, 'index.html'), srcPagesDir);
@@ -204,6 +230,7 @@ async function main() {
   assert.ok(homeRefs.includes('./manifest.webmanifest'));
   assert.ok(homeRefs.includes('./shared/pwa.js'));
   assert.ok(homeRefs.includes('./icons/apple-touch-icon.png'));
+  assert.ok(homeRefs.includes('./icons/logo.svg'));
   const manifest = checkPwaSetup(PORTAL_SUBJECTS);
 
   // Verify each module's references, assets, and portal return navigation

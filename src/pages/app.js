@@ -8,11 +8,16 @@
   const META = window.PORTAL_META || { portalThemeKey: 'yds_portal_theme' };
   const SUBJECTS = window.PORTAL_SUBJECTS || [];
   const readProgress = window.readSubjectProgress;
+  const readActivity = window.readPortalActivity;
+  const computeStreak = window.computeStreakStats;
+  const saveDailyGoal = window.setPortalDailyGoal;
+  const ANALYTICS_COLLAPSED_KEY = 'yds_portal_analytics_collapsed';
 
   const state = {
     theme: 'light',
     filter: 'all',
-    search: ''
+    search: '',
+    analyticsCollapsed: false
   };
 
   function safeGetStorage(key) {
@@ -82,35 +87,56 @@
       subject,
       progress: readProgress ? readProgress(subject) : {
         completedLessons: 0,
+        masteredLessons: 0,
         totalLessons: subject.lessonsCount,
         answeredQuestions: 0,
+        correctQuestions: 0,
         totalQuestions: subject.questionsCount,
-        percent: 0
+        percent: 0,
+        accuracy: 0,
+        masteryPercent: 0,
+        status: 'not-started'
       }
     }));
   }
 
-  function renderSummary(snapshots) {
+  function getAccuracyTone(accuracy, answered) {
+    if (!answered) return 'acc-none';
+    if (accuracy >= 80) return 'acc-high';
+    if (accuracy >= 60) return 'acc-mid';
+    return 'acc-low';
+  }
+
+  function renderSummary(snapshots, streakStats) {
     const totalLessons = snapshots.reduce((acc, item) => acc + item.progress.totalLessons, 0);
     const totalQuestions = snapshots.reduce((acc, item) => acc + item.progress.totalQuestions, 0);
     const completedLessons = snapshots.reduce((acc, item) => acc + item.progress.completedLessons, 0);
+    const masteredLessons = snapshots.reduce((acc, item) => acc + item.progress.masteredLessons, 0);
     const answeredQuestions = snapshots.reduce((acc, item) => acc + item.progress.answeredQuestions, 0);
-    const inProgressCount = snapshots.filter(
-      (item) => item.progress.answeredQuestions > 0 || item.progress.completedLessons > 0
-    ).length;
+    const correctQuestions = snapshots.reduce((acc, item) => acc + item.progress.correctQuestions, 0);
+    const inProgressCount = snapshots.filter((item) => item.progress.status === 'in-progress').length;
+    const completedCount = snapshots.filter((item) => item.progress.status === 'completed').length;
 
     const pct = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
+    const overallAcc = answeredQuestions > 0 ? Math.round((correctQuestions / answeredQuestions) * 100) : 0;
 
     const elSubjects = document.getElementById('statTotalSubjects');
     const elCurriculum = document.getElementById('statTotalCurriculum');
     const elCompleted = document.getElementById('statCompletedLessons');
     const elFill = document.getElementById('statOverallFill');
     const elAnswered = document.getElementById('statAnsweredQuestions');
+    const elAccuracy = document.getElementById('statAccuracyValue');
+    const elAccuracyFill = document.getElementById('statAccuracyFill');
+    const elMasteredMeta = document.getElementById('statMasteredMeta');
+    const elStreak = document.getElementById('statStreakValue');
+    const elGoalFill = document.getElementById('statGoalFill');
+    const elTodayGoalMeta = document.getElementById('statTodayGoalMeta');
     const elInProgress = document.getElementById('inProgressCount');
+    const elCompletedCount = document.getElementById('completedCount');
 
     if (elSubjects) elSubjects.textContent = `${SUBJECTS.length} môn`;
     if (elCurriculum) {
-      elCurriculum.textContent = `${totalLessons} bài • ${formatNumber(totalQuestions)} câu`;
+      elCurriculum.textContent = `${totalLessons} bài • ${formatNumber(totalQuestions)} câu KSA`;
     }
     if (elCompleted) {
       elCompleted.textContent = `${completedLessons} / ${totalLessons} bài (${pct}%)`;
@@ -119,16 +145,186 @@
     if (elAnswered) {
       elAnswered.textContent = `${formatNumber(answeredQuestions)} / ${formatNumber(totalQuestions)} câu trắc nghiệm đã trả lời`;
     }
+    if (elAccuracy) {
+      elAccuracy.textContent = answeredQuestions > 0 ? `${overallAcc}% đúng` : 'Chưa làm bài';
+    }
+    if (elAccuracyFill) {
+      elAccuracyFill.style.width = `${answeredQuestions > 0 ? overallAcc : 0}%`;
+    }
+    if (elMasteredMeta) {
+      elMasteredMeta.textContent = `${formatNumber(correctQuestions)}/${formatNumber(answeredQuestions)} câu đúng • ${masteredLessons} bài đạt chuẩn (≥75%)`;
+    }
+    if (elStreak) {
+      elStreak.textContent = `🔥 ${streakStats.currentStreak} ngày`;
+    }
+    if (elGoalFill) {
+      elGoalFill.style.width = `${streakStats.goalPercent}%`;
+    }
+    if (elTodayGoalMeta) {
+      elTodayGoalMeta.textContent = `Hôm nay: ${streakStats.todayAnswered}/${streakStats.dailyGoal} câu • Kỷ lục: ${streakStats.bestStreak} ngày`;
+    }
     if (elInProgress) elInProgress.textContent = String(inProgressCount);
+    if (elCompletedCount) elCompletedCount.textContent = String(completedCount);
+  }
+
+  function renderWeeklyChart(streakStats, totalAnsweredOverall) {
+    const container = document.getElementById('weeklyChartContainer');
+    const noteEl = document.getElementById('weeklySummaryNote');
+    if (!container) return;
+
+    const days = streakStats.last7Days || [];
+    const maxCount = Math.max(streakStats.dailyGoal || 20, ...days.map((d) => d.answered), 10);
+    const weekTotal = days.reduce((s, d) => s + d.answered, 0);
+    const weekCorrect = days.reduce((s, d) => s + d.correct, 0);
+    const weekAcc = weekTotal > 0 ? Math.round((weekCorrect / weekTotal) * 100) : 0;
+
+    const width = 420;
+    const height = 166;
+    const padTop = 22;
+    const padBottom = 34;
+    const chartH = height - padTop - padBottom;
+    const colWidth = width / days.length;
+    const barW = 28;
+
+    const goalY = padTop + chartH * (1 - Math.min(1, (streakStats.dailyGoal || 20) / maxCount));
+
+    const barsSvg = days.map((day, idx) => {
+      const cx = idx * colWidth + colWidth / 2;
+      const x = cx - barW / 2;
+      const totalH = day.answered > 0 ? Math.max(6, (day.answered / maxCount) * chartH) : 4;
+      const correctH = day.correct > 0 ? Math.max(4, (day.correct / maxCount) * chartH) : 0;
+      const yTotal = padTop + chartH - totalH;
+      const yCorrect = padTop + chartH - correctH;
+      const labelColor = day.isToday ? 'var(--primary)' : 'var(--text-light)';
+      const valueText = day.answered > 0 ? String(day.answered) : '';
+
+      return `
+        <g class="chart-col">
+          <title>${escapeHtml(day.shortDate)}: ${day.answered} câu đã làm (${day.correct} đúng${day.answered ? `, ${day.accuracy}%` : ''})</title>
+          <rect x="${x}" y="${padTop}" width="${barW}" height="${chartH}" rx="7" fill="var(--chart-track)" />
+          ${day.answered > 0
+            ? `<rect x="${x}" y="${yTotal}" width="${barW}" height="${totalH}" rx="7" fill="var(--chart-answered)" />`
+            : `<rect x="${x}" y="${padTop + chartH - 3}" width="${barW}" height="3" rx="1.5" fill="var(--border)" />`
+          }
+          ${correctH > 0
+            ? `<rect x="${x}" y="${yCorrect}" width="${barW}" height="${correctH}" rx="7" fill="var(--chart-correct)" />`
+            : ''
+          }
+          ${valueText
+            ? `<text x="${cx}" y="${Math.max(13, yTotal - 5)}" text-anchor="middle" font-size="10.5" font-weight="700" fill="var(--text-main)">${valueText}</text>`
+            : ''
+          }
+          <text x="${cx}" y="${height - 16}" text-anchor="middle" font-size="11" font-weight="${day.isToday ? '800' : '600'}" fill="${labelColor}">${escapeHtml(day.label)}</text>
+          <text x="${cx}" y="${height - 4}" text-anchor="middle" font-size="9.5" fill="var(--text-light)">${escapeHtml(day.shortDate)}</text>
+        </g>
+      `;
+    }).join('');
+
+    container.innerHTML = `
+      <svg class="weekly-chart-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Biểu đồ số câu trắc nghiệm đã làm trong 7 ngày gần nhất">
+        <line x1="8" y1="${goalY.toFixed(1)}" x2="${width - 8}" y2="${goalY.toFixed(1)}" stroke="var(--primary)" stroke-opacity="0.38" stroke-dasharray="4 4" stroke-width="1.2" />
+        ${barsSvg}
+      </svg>
+    `;
+
+    if (noteEl) {
+      if (weekTotal > 0) {
+        noteEl.innerHTML = `7 ngày qua: <strong>${formatNumber(weekTotal)} câu</strong> (${formatNumber(weekCorrect)} đúng • <strong>${weekAcc}%</strong> chính xác) • Đường đứt nét = mục tiêu ${streakStats.dailyGoal} câu/ngày.`;
+      } else if (totalAnsweredOverall > 0) {
+        noteEl.textContent = `Bạn đã có ${formatNumber(totalAnsweredOverall)} câu từ trước. Làm thêm câu mới hôm nay để bắt đầu ghi nhận chuỗi Streak và biểu đồ 7 ngày!`;
+      } else {
+        noteEl.textContent = 'Hãy làm vài câu trắc nghiệm ở bất kỳ môn nào — biểu đồ nhịp độ 7 ngày và chuỗi Streak sẽ tự động cập nhật tại đây.';
+      }
+    }
+  }
+
+  function renderMasteryBreakdown(snapshots) {
+    const listEl = document.getElementById('subjectMasteryList');
+    const pillEl = document.getElementById('masteredOverviewPill');
+    const focusEl = document.getElementById('nextFocusBox');
+
+    const totalLessons = snapshots.reduce((s, x) => s + x.progress.totalLessons, 0);
+    const totalMastered = snapshots.reduce((s, x) => s + x.progress.masteredLessons, 0);
+    if (pillEl) {
+      pillEl.textContent = `${totalMastered}/${totalLessons} bài đạt chuẩn (≥75%)`;
+    }
+
+    if (listEl) {
+      listEl.innerHTML = snapshots.map(({ subject, progress }) => {
+        const accBadge = progress.answeredQuestions > 0
+          ? `<span class="acc-pill ${getAccuracyTone(progress.accuracy, progress.answeredQuestions)}">${progress.accuracy}% đúng</span>`
+          : '<span class="acc-pill acc-none">Chưa làm</span>';
+
+        return `
+          <a class="mastery-row" href="${escapeHtml(subject.href)}" style="--row-accent: ${escapeHtml(subject.accent)};">
+            <div class="mastery-row-top">
+              <span class="mastery-name">
+                <span class="mastery-dot" aria-hidden="true"></span>
+                <span>${escapeHtml(subject.shortName)}</span>
+              </span>
+              <span class="mastery-metrics">
+                <span>${progress.completedLessons}/${progress.totalLessons} bài</span>
+                ${accBadge}
+              </span>
+            </div>
+            <div class="mastery-track" aria-hidden="true">
+              <div class="mastery-fill" style="width: ${progress.percent}%"></div>
+            </div>
+          </a>
+        `;
+      }).join('');
+    }
+
+    if (focusEl) {
+      const inProg = snapshots
+        .filter((x) => x.progress.status === 'in-progress')
+        .sort((a, b) => a.progress.accuracy - b.progress.accuracy || a.progress.percent - b.progress.percent);
+      const notStarted = snapshots.filter((x) => x.progress.status === 'not-started');
+      const recommended = inProg[0] || notStarted[0] || snapshots[0];
+
+      if (recommended) {
+        const { subject, progress } = recommended;
+        let reason;
+        if (progress.status === 'in-progress') {
+          reason = progress.accuracy < 75
+            ? `Đang học dở (${progress.completedLessons}/${progress.totalLessons} bài, độ chính xác ${progress.accuracy}%) — nên củng cố ngay.`
+            : `Đang tiến triển tốt (${progress.completedLessons}/${progress.totalLessons} bài, ${progress.accuracy}% đúng) — hoàn tất nốt môn này.`;
+        } else if (progress.status === 'completed') {
+          reason = 'Bạn đã hoàn thành toàn bộ 7 môn! Có thể vào phòng thi thử để tổng hợp kiến thức.';
+        } else {
+          reason = `Môn đề xuất bắt đầu (${subject.lessonsCount} bài • ${subject.questionsCount} câu KSA).`;
+        }
+
+        focusEl.innerHTML = `
+          <div class="next-focus-info">
+            <div class="next-focus-label">💡 Đề xuất ôn tập tiếp theo</div>
+            <div class="next-focus-title">${escapeHtml(subject.name)}</div>
+            <div class="next-focus-reason">${escapeHtml(reason)}</div>
+          </div>
+          <a class="btn-focus-go" href="${escapeHtml(subject.href)}">Vào ôn →</a>
+        `;
+      }
+    }
+  }
+
+  function applyAnalyticsCollapsed(collapsed) {
+    state.analyticsCollapsed = Boolean(collapsed);
+    const body = document.getElementById('analyticsBody');
+    const btn = document.getElementById('btnToggleAnalytics');
+    if (body) body.classList.toggle('hidden', state.analyticsCollapsed);
+    if (btn) {
+      btn.textContent = state.analyticsCollapsed ? 'Mở rộng' : 'Thu gọn';
+      btn.setAttribute('aria-expanded', String(!state.analyticsCollapsed));
+    }
+    safeSetStorage(ANALYTICS_COLLAPSED_KEY, state.analyticsCollapsed ? '1' : '0');
   }
 
   function matchesFilter(item) {
     const { subject, progress } = item;
     if (state.filter === 'co-so' && subject.category !== 'co-so') return false;
     if (state.filter === 'chuyen-nganh' && subject.category !== 'chuyen-nganh') return false;
-    if (state.filter === 'in-progress' && progress.answeredQuestions === 0 && progress.completedLessons === 0) {
-      return false;
-    }
+    if (state.filter === 'in-progress' && progress.status !== 'in-progress') return false;
+    if (state.filter === 'completed' && progress.status !== 'completed') return false;
 
     const q = state.search.trim().toLowerCase();
     if (!q) return true;
@@ -149,7 +345,23 @@
     if (!grid) return;
 
     const snapshots = getSnapshots();
-    renderSummary(snapshots);
+    const activity = readActivity ? readActivity() : { days: {}, dailyGoal: 20 };
+    const streakStats = computeStreak
+      ? computeStreak(activity)
+      : { currentStreak: 0, bestStreak: 0, todayAnswered: 0, dailyGoal: 20, goalPercent: 0, last7Days: [] };
+
+    const goalSelect = document.getElementById('dailyGoalSelect');
+    if (goalSelect && streakStats.dailyGoal) {
+      const valStr = String(streakStats.dailyGoal);
+      if ([...goalSelect.options].some((o) => o.value === valStr)) {
+        goalSelect.value = valStr;
+      }
+    }
+
+    const totalAnsweredOverall = snapshots.reduce((s, item) => s + item.progress.answeredQuestions, 0);
+    renderSummary(snapshots, streakStats);
+    renderWeeklyChart(streakStats, totalAnsweredOverall);
+    renderMasteryBreakdown(snapshots);
 
     const visible = snapshots.filter(matchesFilter);
     if (visible.length === 0) {
@@ -163,6 +375,14 @@
       const chipsHtml = (subject.highlights || [])
         .map((chip) => `<span class="feature-chip">${escapeHtml(chip)}</span>`)
         .join('');
+
+      const accTone = getAccuracyTone(progress.accuracy, progress.answeredQuestions);
+      const accText = progress.answeredQuestions > 0
+        ? `Đúng ${progress.accuracy}% (${formatNumber(progress.correctQuestions)}/${formatNumber(progress.answeredQuestions)})`
+        : 'Chưa có câu trả lời';
+      const masteredText = progress.masteredLessons > 0
+        ? `Đạt chuẩn ≥75%: ${progress.masteredLessons} bài`
+        : (progress.status === 'in-progress' ? 'Đang ôn tập' : 'Sẵn sàng bắt đầu');
 
       return `
         <article
@@ -190,17 +410,21 @@
 
           <div class="card-progress">
             <div class="progress-row">
-              <span>Tiến độ: <strong>${progress.completedLessons}/${progress.totalLessons} bài</strong></span>
+              <span>Tiến độ: <strong>${progress.completedLessons}/${progress.totalLessons} bài (${progress.percent}%)</strong></span>
               <span>${formatNumber(progress.answeredQuestions)}/${formatNumber(progress.totalQuestions)} câu</span>
             </div>
             <div class="card-track" aria-hidden="true">
               <div class="card-fill" style="width: ${progress.percent}%"></div>
             </div>
+            <div class="progress-meta-row">
+              <span class="acc-pill ${accTone}">${escapeHtml(accText)}</span>
+              <span class="mastery-subtext">${escapeHtml(masteredText)}</span>
+            </div>
           </div>
 
           <div class="card-actions">
             <a class="btn-enter" href="${escapeHtml(subject.href)}">
-              <span>Vào học môn này</span>
+              <span>${progress.status === 'in-progress' ? 'Tiếp tục ôn môn này' : 'Vào học môn này'}</span>
               <span aria-hidden="true">→</span>
             </a>
           </div>
@@ -253,6 +477,23 @@
       });
     }
 
+    const goalSelect = document.getElementById('dailyGoalSelect');
+    if (goalSelect) {
+      goalSelect.addEventListener('change', (e) => {
+        if (saveDailyGoal) {
+          saveDailyGoal(e.target.value);
+        }
+        renderCards();
+      });
+    }
+
+    const btnToggleAnalytics = document.getElementById('btnToggleAnalytics');
+    if (btnToggleAnalytics) {
+      btnToggleAnalytics.addEventListener('click', () => {
+        applyAnalyticsCollapsed(!state.analyticsCollapsed);
+      });
+    }
+
     window.addEventListener('storage', renderCards);
     window.addEventListener('pageshow', renderCards);
     window.addEventListener('focus', renderCards);
@@ -261,6 +502,7 @@
   function init() {
     const savedTheme = safeGetStorage(META.portalThemeKey) || 'light';
     applyTheme(savedTheme);
+    applyAnalyticsCollapsed(safeGetStorage(ANALYTICS_COLLAPSED_KEY) === '1');
     renderCards();
     bindEvents();
   }

@@ -191,14 +191,37 @@
     }
   ];
 
+  const ACTIVITY_STORAGE_KEY = 'yds_portal_activity_v1';
+  const DEFAULT_DAILY_GOAL = 20;
+
+  function getLocalDateKey(dateInput) {
+    const d = dateInput ? new Date(dateInput) : new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  function addDays(dateKey, delta) {
+    const [y, m, d] = dateKey.split('-').map(Number);
+    const dt = new Date(y, m - 1, d);
+    dt.setDate(dt.getDate() + delta);
+    return getLocalDateKey(dt);
+  }
+
   function readSubjectProgress(subject, storage) {
     const store = storage || (typeof global.localStorage !== 'undefined' ? global.localStorage : null);
     const result = {
       completedLessons: 0,
+      masteredLessons: 0,
       totalLessons: subject.lessonsCount,
       answeredQuestions: 0,
+      correctQuestions: 0,
       totalQuestions: subject.questionsCount,
-      percent: 0
+      percent: 0,
+      accuracy: 0,
+      masteryPercent: 0,
+      status: 'not-started'
     };
     if (!store) return result;
 
@@ -211,22 +234,39 @@
       if (subject.progressSchema === 'v2') {
         const completed = parsed.completedLessons || {};
         const answers = parsed.answers || {};
-        result.completedLessons = Object.keys(completed).filter(
-          (id) => completed[id] && Number(completed[id].bestScore || 0) >= 18
-        ).length;
-        result.answeredQuestions = Object.keys(answers).reduce(
-          (sum, id) => sum + Object.keys(answers[id] || {}).length,
-          0
-        );
+        const lessonIds = new Set([...Object.keys(completed), ...Object.keys(answers)]);
+        lessonIds.forEach((id) => {
+          const comp = completed[id];
+          const ansMap = answers[id] || {};
+          const answeredCount = Object.keys(ansMap).length;
+          const totalInLesson = Number((comp && comp.total) || 24);
+          const bestScore = Number((comp && comp.bestScore) || 0);
+          if (bestScore >= 18) {
+            result.completedLessons += 1;
+            result.masteredLessons += 1;
+          }
+          result.answeredQuestions += answeredCount;
+          if (answeredCount > 0) {
+            result.correctQuestions += Math.min(answeredCount, Math.max(0, bestScore));
+          }
+          if (totalInLesson > 0 && result.completedLessons > result.totalLessons) {
+            result.completedLessons = result.totalLessons;
+          }
+        });
       } else {
         Object.keys(parsed).forEach((lessonId) => {
           const entry = parsed[lessonId];
           if (!entry || typeof entry !== 'object') return;
           const answeredCount = Object.keys(entry.answered || {}).length;
           const totalInLesson = Number(entry.total || 24);
+          const score = Math.min(answeredCount, Math.max(0, Number(entry.score || 0)));
           result.answeredQuestions += answeredCount;
+          result.correctQuestions += score;
           if (answeredCount >= Math.ceil(totalInLesson * 0.5)) {
             result.completedLessons += 1;
+          }
+          if (score >= Math.ceil(totalInLesson * 0.75)) {
+            result.masteredLessons += 1;
           }
         });
       }
@@ -234,13 +274,130 @@
       result.percent = result.totalLessons > 0
         ? Math.min(100, Math.round((result.completedLessons / result.totalLessons) * 100))
         : 0;
+      result.masteryPercent = result.totalLessons > 0
+        ? Math.min(100, Math.round((result.masteredLessons / result.totalLessons) * 100))
+        : 0;
+      result.accuracy = result.answeredQuestions > 0
+        ? Math.min(100, Math.round((result.correctQuestions / result.answeredQuestions) * 100))
+        : 0;
+      if (result.completedLessons >= result.totalLessons && result.totalLessons > 0) {
+        result.status = 'completed';
+      } else if (result.answeredQuestions > 0 || result.completedLessons > 0) {
+        result.status = 'in-progress';
+      }
     } catch (e) {
       // Ignore malformed localStorage payloads
     }
     return result;
   }
 
+  function readPortalActivity(storage) {
+    const store = storage || (typeof global.localStorage !== 'undefined' ? global.localStorage : null);
+    const fallback = { days: {}, dailyGoal: DEFAULT_DAILY_GOAL, lastSnapshots: {} };
+    if (!store) return fallback;
+    try {
+      const raw = store.getItem(ACTIVITY_STORAGE_KEY);
+      if (!raw) return fallback;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') return fallback;
+      const goal = Number(parsed.dailyGoal || DEFAULT_DAILY_GOAL);
+      return {
+        days: parsed.days && typeof parsed.days === 'object' ? parsed.days : {},
+        dailyGoal: Number.isFinite(goal) && goal >= 5 ? Math.min(200, Math.round(goal)) : DEFAULT_DAILY_GOAL,
+        lastSnapshots: parsed.lastSnapshots && typeof parsed.lastSnapshots === 'object' ? parsed.lastSnapshots : {}
+      };
+    } catch (e) {
+      return fallback;
+    }
+  }
+
+  function setPortalDailyGoal(goal, storage) {
+    const store = storage || (typeof global.localStorage !== 'undefined' ? global.localStorage : null);
+    const normalized = Math.max(5, Math.min(200, Math.round(Number(goal) || DEFAULT_DAILY_GOAL)));
+    if (!store) return normalized;
+    const activity = readPortalActivity(store);
+    activity.dailyGoal = normalized;
+    try {
+      store.setItem(ACTIVITY_STORAGE_KEY, JSON.stringify(activity));
+    } catch (e) {
+      // Ignore storage quota errors
+    }
+    return normalized;
+  }
+
+  function computeStreakStats(activity, todayOverride) {
+    const data = activity || { days: {}, dailyGoal: DEFAULT_DAILY_GOAL };
+    const days = data.days || {};
+    const todayKey = todayOverride || getLocalDateKey();
+    const yesterdayKey = addDays(todayKey, -1);
+
+    const activeDateKeys = Object.keys(days)
+      .filter((k) => /^\d{4}-\d{2}-\d{2}$/.test(k) && Number((days[k] && days[k].answered) || 0) > 0)
+      .sort();
+    const activeSet = new Set(activeDateKeys);
+
+    let currentStreak = 0;
+    let cursor = activeSet.has(todayKey) ? todayKey : (activeSet.has(yesterdayKey) ? yesterdayKey : null);
+    while (cursor && activeSet.has(cursor)) {
+      currentStreak += 1;
+      cursor = addDays(cursor, -1);
+    }
+
+    let bestStreak = 0;
+    let run = 0;
+    let prev = null;
+    activeDateKeys.forEach((k) => {
+      if (prev && addDays(prev, 1) === k) {
+        run += 1;
+      } else {
+        run = 1;
+      }
+      if (run > bestStreak) bestStreak = run;
+      prev = k;
+    });
+
+    const weekdayNames = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+    const last7Days = [];
+    for (let offset = -6; offset <= 0; offset += 1) {
+      const key = addDays(todayKey, offset);
+      const entry = days[key] || {};
+      const answered = Math.max(0, Number(entry.answered || 0));
+      const correct = Math.min(answered, Math.max(0, Number(entry.correct || 0)));
+      const [y, m, d] = key.split('-').map(Number);
+      const dt = new Date(y, m - 1, d);
+      last7Days.push({
+        dateKey: key,
+        label: offset === 0 ? 'Nay' : weekdayNames[dt.getDay()],
+        shortDate: `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}`,
+        answered,
+        correct,
+        accuracy: answered > 0 ? Math.round((correct / answered) * 100) : 0,
+        isToday: offset === 0
+      });
+    }
+
+    const todayEntry = days[todayKey] || {};
+    const todayAnswered = Math.max(0, Number(todayEntry.answered || 0));
+    const todayCorrect = Math.min(todayAnswered, Math.max(0, Number(todayEntry.correct || 0)));
+    const dailyGoal = data.dailyGoal || DEFAULT_DAILY_GOAL;
+
+    return {
+      todayKey,
+      todayAnswered,
+      todayCorrect,
+      dailyGoal,
+      goalPercent: Math.min(100, Math.round((todayAnswered / dailyGoal) * 100)),
+      currentStreak,
+      bestStreak,
+      activeDaysTotal: activeDateKeys.length,
+      last7Days
+    };
+  }
+
   global.PORTAL_META = PORTAL_META;
   global.PORTAL_SUBJECTS = PORTAL_SUBJECTS;
   global.readSubjectProgress = readSubjectProgress;
+  global.readPortalActivity = readPortalActivity;
+  global.setPortalDailyGoal = setPortalDailyGoal;
+  global.computeStreakStats = computeStreakStats;
 })(typeof window !== 'undefined' ? window : globalThis);

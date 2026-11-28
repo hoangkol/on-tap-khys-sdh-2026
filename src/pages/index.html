@@ -13,7 +13,7 @@
   <title>Cổng Ôn Tập Cao Học KHYS SĐH 2026 – ĐH Y Dược TP.HCM (YDS)</title>
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png" />
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%230f172a'/%3E%3Cpath d='M18 22h28M18 32h28M18 42h18' stroke='%2338bdf8' stroke-width='4.5' stroke-linecap='round'/%3E%3Ccircle cx='46' cy='42' r='5' fill='%2310b981'/%3E%3C/svg%3E" />
+  <link rel="icon" type="image/svg+xml" href="./icons/logo.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -23,8 +23,14 @@
   <header class="portal-header">
     <div class="portal-shell header-inner">
       <div class="brand-lockup">
-        <span class="brand-pill">Đề cương SĐH 2026 • KHYS YDS</span>
-        <div class="brand-sub">Cổng ôn tập tổng hợp 7 môn • by hoangkol 2026</div>
+        <img src="./icons/logo.svg" alt="Logo KHYS YDS 2026" class="brand-logo" width="42" height="42" />
+        <div class="brand-text">
+          <div class="brand-title-row">
+            <span class="brand-name">KHYS YDS 2026</span>
+            <span class="brand-pill">Đề cương SĐH 2026</span>
+          </div>
+          <div class="brand-sub">Cổng ôn tập tổng hợp 7 môn • by hoangkol 2026</div>
+        </div>
       </div>
       <div class="header-actions">
         <button class="btn btn-install" id="btnInstallPwa" type="button" title="Cài đặt thành ứng dụng độc lập trên thiết bị">
@@ -42,35 +48,103 @@
 
   <main class="portal-shell main-content">
     <section class="hero-card" aria-labelledby="portalTitle">
-      <div class="hero-copy">
-        <div class="hero-meta-row">
-          <p class="hero-kicker">Tuyển sinh Sau đại học • Đại học Y Dược TP.HCM (UMP / YDS)</p>
-          <span class="signature-pill">by hoangkol 2026</span>
+      <div class="hero-header-row">
+        <div class="hero-emblem" aria-hidden="true">
+          <img src="./icons/logo.svg" alt="" width="68" height="68" />
         </div>
-        <h1 id="portalTitle">Menu Ôn Tập Cao Học Khoa Học Y Sinh 2026</h1>
-        <p class="hero-desc">
-          Chọn môn học bên dưới để vào thẳng module chuyên sâu (<code>/sinh-ly/</code>, <code>/giai-phau/</code>, <code>/mo-hoc/</code>, <code>/giai-phau-benh/</code>, <code>/sinh-ly-benh-mien-dich/</code>, <code>/vi-sinh/</code>, <code>/ky-sinh-trung/</code>). Tiến độ làm bài của từng môn được lưu cục bộ trên trình duyệt thiết bị này.
-        </p>
+        <div class="hero-copy">
+          <div class="hero-meta-row">
+            <p class="hero-kicker">Tuyển sinh Sau đại học • Đại học Y Dược TP.HCM (UMP / YDS)</p>
+            <span class="signature-pill">by hoangkol 2026</span>
+          </div>
+          <h1 id="portalTitle">Menu Ôn Tập Cao Học Khoa Học Y Sinh 2026</h1>
+          <p class="hero-desc">
+            Chọn môn học bên dưới để vào thẳng module chuyên sâu (<code>/sinh-ly/</code>, <code>/giai-phau/</code>, <code>/mo-hoc/</code>, <code>/giai-phau-benh/</code>, <code>/sinh-ly-benh-mien-dich/</code>, <code>/vi-sinh/</code>, <code>/ky-sinh-trung/</code>). Tiến độ, tỷ lệ đúng/sai và chuỗi ngày ôn tập được lưu cục bộ trên thiết bị này.
+          </p>
+        </div>
       </div>
 
       <div class="summary-grid" aria-label="Thống kê tổng hợp toàn cổng">
         <div class="stat-box">
-          <div class="stat-label">Môn học tích hợp</div>
+          <div class="stat-label">Môn học &amp; Giáo trình</div>
           <div class="stat-value" id="statTotalSubjects">7 môn</div>
-          <div class="stat-meta">1 Môn cơ sở • 6 Chuyên ngành</div>
-        </div>
-        <div class="stat-box">
-          <div class="stat-label">Tổng bài học &amp; câu KSA</div>
-          <div class="stat-value" id="statTotalCurriculum">61 bài • 1.464 câu</div>
-          <div class="stat-meta">Kèm 3D, Atlas &amp; Phòng thi thử</div>
+          <div class="stat-meta" id="statTotalCurriculum">61 bài • 1.464 câu KSA</div>
         </div>
         <div class="stat-box stat-box-progress">
-          <div class="stat-label">Tiến độ hoàn thành trên thiết bị</div>
+          <div class="stat-label">Tiến độ hoàn thành</div>
           <div class="stat-value" id="statCompletedLessons">0 / 61 bài (0%)</div>
           <div class="overall-track" aria-hidden="true">
             <div class="overall-fill" id="statOverallFill"></div>
           </div>
           <div class="stat-meta" id="statAnsweredQuestions">0 / 1.464 câu trắc nghiệm đã trả lời</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Độ chính xác &amp; Thành thạo</div>
+          <div class="stat-value" id="statAccuracyValue">—</div>
+          <div class="overall-track" aria-hidden="true">
+            <div class="overall-fill overall-fill-accuracy" id="statAccuracyFill"></div>
+          </div>
+          <div class="stat-meta" id="statMasteredMeta">0/0 câu đúng • 0 bài đạt chuẩn (≥75%)</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Chuỗi ngày ôn tập (Streak)</div>
+          <div class="stat-value" id="statStreakValue">🔥 0 ngày</div>
+          <div class="overall-track" aria-hidden="true">
+            <div class="overall-fill overall-fill-streak" id="statGoalFill"></div>
+          </div>
+          <div class="stat-meta" id="statTodayGoalMeta">Hôm nay: 0/20 câu • Kỷ lục: 0 ngày</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="analytics-panel" id="analyticsPanel" aria-labelledby="analyticsTitle">
+      <div class="analytics-header">
+        <div>
+          <h2 id="analyticsTitle">📈 Tiến bộ &amp; Hiệu suất ôn tập</h2>
+          <p class="analytics-subtitle">Theo dõi biểu đồ 7 ngày gần nhất, độ chính xác từng môn và gợi ý trọng tâm ôn tiếp</p>
+        </div>
+        <div class="analytics-controls">
+          <label class="goal-picker" for="dailyGoalSelect">
+            <span>Mục tiêu ngày:</span>
+            <select id="dailyGoalSelect" aria-label="Chọn mục tiêu số câu mỗi ngày">
+              <option value="10">10 câu</option>
+              <option value="20" selected>20 câu</option>
+              <option value="30">30 câu</option>
+              <option value="50">50 câu</option>
+            </select>
+          </label>
+          <button type="button" class="btn btn-outline btn-sm" id="btnToggleAnalytics" aria-expanded="true" aria-controls="analyticsBody">
+            Thu gọn
+          </button>
+        </div>
+      </div>
+
+      <div class="analytics-grid" id="analyticsBody">
+        <div class="analytics-card">
+          <div class="analytics-card-head">
+            <h3>📅 Nhịp độ 7 ngày gần nhất</h3>
+            <div class="chart-legend" aria-hidden="true">
+              <span class="legend-item"><i class="legend-dot legend-answered"></i> Đã làm</span>
+              <span class="legend-item"><i class="legend-dot legend-correct"></i> Đúng</span>
+            </div>
+          </div>
+          <div class="weekly-chart-wrap" id="weeklyChartContainer">
+            <!-- Populated by app.js -->
+          </div>
+          <div class="analytics-note" id="weeklySummaryNote"></div>
+        </div>
+
+        <div class="analytics-card">
+          <div class="analytics-card-head">
+            <h3>🎯 Độ thành thạo 7 môn</h3>
+            <span class="mastery-pill" id="masteredOverviewPill">0/61 bài đạt chuẩn</span>
+          </div>
+          <div class="mastery-list" id="subjectMasteryList">
+            <!-- Populated by app.js -->
+          </div>
+          <div class="next-focus-box" id="nextFocusBox">
+            <!-- Populated by app.js -->
+          </div>
         </div>
       </div>
     </section>
@@ -89,7 +163,8 @@
         <button type="button" class="filter-pill active" data-filter="all">Tất cả (7)</button>
         <button type="button" class="filter-pill" data-filter="co-so">Môn cơ sở (1)</button>
         <button type="button" class="filter-pill" data-filter="chuyen-nganh">Chuyên ngành KHYS (6)</button>
-        <button type="button" class="filter-pill" data-filter="in-progress">Đang học dở (<span id="inProgressCount">0</span>)</button>
+        <button type="button" class="filter-pill" data-filter="in-progress">Đang học (<span id="inProgressCount">0</span>)</button>
+        <button type="button" class="filter-pill" data-filter="completed">Hoàn thành (<span id="completedCount">0</span>)</button>
       </div>
     </section>
 
