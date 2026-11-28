@@ -1,7 +1,7 @@
 // ==========================================================================
 // PORTAL SYNC ENGINE — CHUYỂN ĐỔI NHANH TIẾN ĐỘ GIỮA CÁC THIẾT BỊ
-// Hỗ trợ: Mã chuyển nhanh (KHYS1/KHYS0 + Link/QR), File JSON (Merge/Overwrite),
-// và Đồng bộ Cloud Supabase tùy chọn (0 dependency, chạy thuần trình duyệt).
+// Hỗ trợ: Mã chuyển nhanh (KHYS1/KHYS0 + Link/QR) và File JSON (Merge/Overwrite),
+// 0 dependency, chạy thuần trình duyệt.
 // ==========================================================================
 
 (function (global) {
@@ -10,23 +10,6 @@
   const SYNC_VERSION = 1;
   const ACTIVITY_KEY = 'yds_portal_activity_v1';
   const THEME_KEY = 'yds_portal_theme';
-  const SUPA_CFG_KEY = 'yds_portal_supabase_cfg_v1';
-
-  const SUPABASE_SETUP_SQL = `-- Chạy đoạn SQL này 1 lần trong Supabase SQL Editor để bật đồng bộ Cloud
-create table if not exists public.khys_sync_profiles (
-  sync_id text primary key,
-  payload jsonb not null,
-  updated_at timestamptz not null default now()
-);
-
-alter table public.khys_sync_profiles enable row level security;
-
-drop policy if exists "khys_sync_public_rw" on public.khys_sync_profiles;
-create policy "khys_sync_public_rw"
-  on public.khys_sync_profiles
-  for all
-  using (true)
-  with check (true);`;
 
   function getSubjects() {
     return Array.isArray(global.PORTAL_SUBJECTS) ? global.PORTAL_SUBJECTS : [];
@@ -707,102 +690,13 @@ create policy "khys_sync_public_rw"
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${total} ${total}" shape-rendering="crispEdges" role="img" aria-label="Mã QR chuyển tiến độ"><rect width="${total}" height="${total}" fill="#ffffff"/><path d="${d}" fill="#0f172a"/></svg>`;
   }
 
-  // ================= OPTIONAL SUPABASE CLOUD SYNC =================
-  function loadSupabaseConfig(storage) {
-    const store = storage || (typeof global.localStorage !== 'undefined' ? global.localStorage : null);
-    if (!store) return { url: '', key: '', syncId: '' };
-    const cfg = safeParseJson(store.getItem(SUPA_CFG_KEY)) || {};
-    return {
-      url: String(cfg.url || ''),
-      key: String(cfg.key || ''),
-      syncId: String(cfg.syncId || '')
-    };
-  }
-
-  function saveSupabaseConfig(cfg, storage) {
-    const store = storage || (typeof global.localStorage !== 'undefined' ? global.localStorage : null);
-    if (!store) return;
-    const normalized = {
-      url: String((cfg && cfg.url) || '').trim().replace(/\/+$/, ''),
-      key: String((cfg && cfg.key) || '').trim(),
-      syncId: String((cfg && cfg.syncId) || '').trim()
-    };
-    store.setItem(SUPA_CFG_KEY, JSON.stringify(normalized));
-    return normalized;
-  }
-
-  function validateSupaInputs(url, key, syncId) {
-    const cleanUrl = String(url || '').trim().replace(/\/+$/, '');
-    const cleanKey = String(key || '').trim();
-    const cleanId = String(syncId || '').trim();
-    if (!/^https:\/\/.+\.supabase\.co$/i.test(cleanUrl) && !/^https?:\/\/.+/i.test(cleanUrl)) {
-      throw new Error('Supabase URL không hợp lệ (VD: https://xyz.supabase.co).');
-    }
-    if (!cleanKey) throw new Error('Vui lòng nhập Supabase Anon Key.');
-    if (!cleanId || cleanId.length < 3) throw new Error('Mã hồ sơ (Sync ID) cần tối thiểu 3 ký tự (VD: hoangkol-2026).');
-    return { cleanUrl, cleanKey, cleanId };
-  }
-
-  async function supabasePush(url, key, syncId, payload) {
-    const { cleanUrl, cleanKey, cleanId } = validateSupaInputs(url, key, syncId);
-    const endpoint = `${cleanUrl}/rest/v1/khys_sync_profiles?on_conflict=sync_id`;
-    const res = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        apikey: cleanKey,
-        Authorization: `Bearer ${cleanKey}`,
-        'Content-Type': 'application/json',
-        Prefer: 'resolution=merge-duplicates,return=representation'
-      },
-      body: JSON.stringify({
-        sync_id: cleanId,
-        payload,
-        updated_at: new Date().toISOString()
-      })
-    });
-    if (!res.ok) {
-      const txt = await res.text();
-      throw new Error(`Supabase trả lỗi ${res.status}: ${txt.slice(0, 180)}`);
-    }
-    return { syncId: cleanId, pushedAt: new Date().toISOString() };
-  }
-
-  async function supabasePull(url, key, syncId) {
-    const { cleanUrl, cleanKey, cleanId } = validateSupaInputs(url, key, syncId);
-    const endpoint = `${cleanUrl}/rest/v1/khys_sync_profiles?sync_id=eq.${encodeURIComponent(cleanId)}&select=payload,updated_at&limit=1`;
-    const res = await fetch(endpoint, {
-      method: 'GET',
-      headers: {
-        apikey: cleanKey,
-        Authorization: `Bearer ${cleanKey}`
-      }
-    });
-    if (!res.ok) {
-      const txt = await res.text();
-      throw new Error(`Supabase trả lỗi ${res.status}: ${txt.slice(0, 180)}`);
-    }
-    const rows = await res.json();
-    if (!Array.isArray(rows) || rows.length === 0 || !rows[0].payload) {
-      throw new Error(`Chưa có dữ liệu nào trên Cloud với mã hồ sơ "${cleanId}". Hãy đẩy từ máy kia lên trước.`);
-    }
-    return {
-      payload: normalizeIncomingPayload(rows[0].payload),
-      updatedAt: rows[0].updated_at || null
-    };
-  }
-
   global.PortalSync = {
-    SUPABASE_SETUP_SQL,
     collectExportPayload,
     normalizeIncomingPayload,
     encodeTransferCode,
     decodeTransferCode,
     previewImportPayload,
     applyImportPayload,
-    generateQrSvg,
-    loadSupabaseConfig,
-    saveSupabaseConfig,
-    supabasePush,
-    supabasePull
+    generateQrSvg
   };
 })(typeof window !== 'undefined' ? window : globalThis);

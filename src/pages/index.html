@@ -188,7 +188,7 @@
   <footer class="portal-footer">
     <div class="portal-shell footer-inner">
       <span>Cổng Ôn Tập Cao Học Khoa Học Y Sinh (KHYS) • ĐH Y Dược TP.HCM • <strong>by hoangkol 2026</strong></span>
-      <span>Lưu cục bộ trên trình duyệt • Hỗ trợ chuyển nhanh tiến độ đa thiết bị (Mã/QR/JSON/Cloud)</span>
+      <span>Lưu cục bộ trên trình duyệt • Hỗ trợ chuyển nhanh tiến độ đa thiết bị (Mã / Link / QR / JSON)</span>
     </div>
   </footer>
 
@@ -206,7 +206,6 @@
       <div class="sync-tabs" role="tablist" aria-label="Phương thức chuyển đổi tiến độ">
         <button type="button" class="sync-tab active" data-sync-tab="transfer" role="tab" aria-selected="true">🔗 Mã / Link &amp; QR</button>
         <button type="button" class="sync-tab" data-sync-tab="file" role="tab" aria-selected="false">💾 File JSON</button>
-        <button type="button" class="sync-tab" data-sync-tab="cloud" role="tab" aria-selected="false">☁️ Cloud Supabase</button>
       </div>
 
       <div class="sync-modal-body">
@@ -257,45 +256,6 @@
                 <input type="file" id="syncFileInput" accept=".json,application/json" class="sr-only" />
               </label>
             </div>
-          </div>
-        </div>
-
-        <!-- TAB 3: CLOUD SUPABASE -->
-        <div class="sync-pane hidden" id="syncPaneCloud">
-          <div class="sync-box">
-            <h3>☁️ Đồng bộ Cloud Supabase (Tùy chọn đa thiết bị 1 chạm)</h3>
-            <p class="sync-hint">Kết nối kho Supabase cá nhân (tương tự các dự án quản lý khác) để đẩy và kéo tiến độ giữa các thiết bị bất kỳ lúc nào.</p>
-            <div class="sync-form-grid">
-              <label class="sync-field">
-                <span>Supabase Project URL</span>
-                <input type="url" id="supaUrlInput" placeholder="https://your-project.supabase.co" autocomplete="off" />
-              </label>
-              <label class="sync-field">
-                <span>Supabase Anon Public Key</span>
-                <input type="password" id="supaKeyInput" placeholder="eyJhbGciOi..." autocomplete="off" />
-              </label>
-              <label class="sync-field sync-field-full">
-                <span>Mã Hồ Sơ Cá Nhân (Sync ID)</span>
-                <div class="sync-id-row">
-                  <input type="text" id="supaSyncIdInput" placeholder="VD: hoangkol-khys-2026" autocomplete="off" />
-                  <button type="button" class="btn btn-outline btn-sm" id="btnGenSyncId">🎲 Tạo mã</button>
-                </div>
-              </label>
-            </div>
-
-            <div class="sync-btn-row">
-              <button type="button" class="btn btn-primary-solid" id="btnSupaPush">☁️ Đẩy tiến độ lên Cloud</button>
-              <button type="button" class="btn btn-outline" id="btnSupaPull">⬇️ Tải &amp; Xem trước từ Cloud</button>
-              <button type="button" class="btn btn-outline" id="btnSupaSaveCfg">💾 Lưu cấu hình</button>
-            </div>
-
-            <details class="sync-sql-details">
-              <summary>📋 Xem câu lệnh SQL tạo bảng <code>khys_sync_profiles</code> trên Supabase (chỉ chạy 1 lần)</summary>
-              <div class="sync-sql-wrap">
-                <pre id="supaSqlPreview"></pre>
-                <button type="button" class="btn btn-outline btn-sm" id="btnCopySupaSql">📋 Copy SQL</button>
-              </div>
-            </details>
           </div>
         </div>
 

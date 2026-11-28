@@ -528,8 +528,7 @@
     });
     const panes = {
       transfer: document.getElementById('syncPaneTransfer'),
-      file: document.getElementById('syncPaneFile'),
-      cloud: document.getElementById('syncPaneCloud')
+      file: document.getElementById('syncPaneFile')
     };
     Object.keys(panes).forEach((k) => {
       if (panes[k]) panes[k].classList.toggle('hidden', k !== tabName || Boolean(state.pendingPayload));
@@ -545,7 +544,7 @@
     const summaryEl = document.getElementById('syncPreviewSummary');
     const tbody = document.getElementById('syncPreviewTbody');
 
-    ['syncPaneTransfer', 'syncPaneFile', 'syncPaneCloud'].forEach((id) => {
+    ['syncPaneTransfer', 'syncPaneFile'].forEach((id) => {
       const el = document.getElementById(id);
       if (el) el.classList.add('hidden');
     });
@@ -617,7 +616,7 @@
         } else {
           qrBox.innerHTML = `
             <div class="sync-qr-fallback">
-              📦 Gói tiến độ khá lớn (${formatNumber(code.length)} ký tự) — hãy nhấn <strong>Copy Link chuyển nhanh</strong> gửi qua Zalo/Messenger hoặc dùng tab <strong>File JSON</strong> / <strong>Cloud Supabase</strong>.
+              📦 Gói tiến độ khá lớn (${formatNumber(code.length)} ký tự) — hãy nhấn <strong>Copy Link chuyển nhanh</strong> gửi qua Zalo/Messenger hoặc dùng tab <strong>File JSON</strong>.
             </div>
           `;
         }
@@ -637,18 +636,6 @@
     backdrop.classList.remove('hidden');
     backdrop.setAttribute('aria-hidden', 'false');
     refreshGeneratedTransferCode();
-
-    if (SYNC) {
-      const cfg = SYNC.loadSupabaseConfig();
-      const uEl = document.getElementById('supaUrlInput');
-      const kEl = document.getElementById('supaKeyInput');
-      const iEl = document.getElementById('supaSyncIdInput');
-      const sqlEl = document.getElementById('supaSqlPreview');
-      if (uEl && !uEl.value) uEl.value = cfg.url;
-      if (kEl && !kEl.value) kEl.value = cfg.key;
-      if (iEl && !iEl.value) iEl.value = cfg.syncId;
-      if (sqlEl && !sqlEl.textContent) sqlEl.textContent = SYNC.SUPABASE_SETUP_SQL;
-    }
   }
 
   function closeSyncModal() {
@@ -791,58 +778,6 @@
         dropzone.classList.remove('dragover');
         const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
         if (f) handleJsonFile(f);
-      });
-    }
-
-    // Cloud Supabase handlers
-    const uEl = document.getElementById('supaUrlInput');
-    const kEl = document.getElementById('supaKeyInput');
-    const iEl = document.getElementById('supaSyncIdInput');
-    const btnGenId = document.getElementById('btnGenSyncId');
-    const btnSaveSupa = document.getElementById('btnSupaSaveCfg');
-    const btnPushSupa = document.getElementById('btnSupaPush');
-    const btnPullSupa = document.getElementById('btnSupaPull');
-    const btnCopySql = document.getElementById('btnCopySupaSql');
-
-    if (btnGenId && iEl) {
-      btnGenId.addEventListener('click', () => {
-        const rand = Math.random().toString(36).slice(2, 7);
-        iEl.value = `khys2026-${rand}`;
-      });
-    }
-    if (btnSaveSupa && SYNC) {
-      btnSaveSupa.addEventListener('click', () => {
-        SYNC.saveSupabaseConfig({ url: uEl.value, key: kEl.value, syncId: iEl.value });
-        setSyncStatus('success', 'Đã lưu cấu hình Supabase trên trình duyệt này.');
-      });
-    }
-    if (btnCopySql && SYNC) {
-      btnCopySql.addEventListener('click', () => copyTextWithFeedback(SYNC.SUPABASE_SETUP_SQL, btnCopySql, '✓ Đã copy SQL!'));
-    }
-    if (btnPushSupa && SYNC) {
-      btnPushSupa.addEventListener('click', async () => {
-        try {
-          setSyncStatus('info', '⏳ Đang đẩy tiến độ lên Supabase Cloud...');
-          SYNC.saveSupabaseConfig({ url: uEl.value, key: kEl.value, syncId: iEl.value });
-          const payload = SYNC.collectExportPayload();
-          const res = await SYNC.supabasePush(uEl.value, kEl.value, iEl.value, payload);
-          setSyncStatus('success', `☁️ Đã đẩy lên Cloud thành công (Hồ sơ: ${res.syncId} • ${payload.meta.answeredQuestions} câu).`);
-        } catch (err) {
-          setSyncStatus('error', err.message);
-        }
-      });
-    }
-    if (btnPullSupa && SYNC) {
-      btnPullSupa.addEventListener('click', async () => {
-        try {
-          setSyncStatus('info', '⏳ Đang tải tiến độ từ Supabase Cloud...');
-          SYNC.saveSupabaseConfig({ url: uEl.value, key: kEl.value, syncId: iEl.value });
-          const res = await SYNC.supabasePull(uEl.value, kEl.value, iEl.value);
-          setSyncStatus('', '');
-          showSyncPreview(res.payload, `Từ Cloud Supabase (${iEl.value.trim()})`);
-        } catch (err) {
-          setSyncStatus('error', err.message);
-        }
       });
     }
 
