@@ -227,11 +227,68 @@ async function main() {
   // Verify root homepage references & PWA manifest/service worker
   const homeRefs = checkLocalHtmlReferences(path.join(srcPagesDir, 'index.html'), srcPagesDir);
   assert.ok(homeRefs.includes('./shared/portal-config.js'));
+  assert.ok(homeRefs.includes('./shared/portal-sync.js'));
   assert.ok(homeRefs.includes('./manifest.webmanifest'));
   assert.ok(homeRefs.includes('./shared/pwa.js'));
   assert.ok(homeRefs.includes('./icons/apple-touch-icon.png'));
   assert.ok(homeRefs.includes('./icons/logo.svg'));
   const manifest = checkPwaSetup(PORTAL_SUBJECTS);
+
+  // Verify PortalSync codec, merge, preview, and QR generation
+  const syncCtx = {
+    window: {
+      PORTAL_SUBJECTS,
+      readSubjectProgress
+    },
+    TextEncoder,
+    TextDecoder,
+    CompressionStream: globalThis.CompressionStream,
+    DecompressionStream: globalThis.DecompressionStream,
+    Response: globalThis.Response,
+    btoa: globalThis.btoa,
+    atob: globalThis.atob
+  };
+  syncCtx.window.window = syncCtx.window;
+  vm.createContext(syncCtx);
+  vm.runInContext(fs.readFileSync(path.join(srcPagesDir, 'shared', 'portal-sync.js'), 'utf8'), syncCtx);
+  const { PortalSync } = syncCtx.window;
+  assert.ok(PortalSync, 'PortalSync must be exposed on window');
+
+  const deviceAStore = {
+    data: {
+      yds_physio_2026_progress: JSON.stringify({ 1: { answered: { 0: 1, 1: 2 }, score: 2, total: 24 } }),
+      yds_portal_activity_v1: JSON.stringify({ dailyGoal: 20, days: { '2026-11-27': { answered: 10, correct: 8 } } })
+    },
+    getItem(k) { return Object.prototype.hasOwnProperty.call(this.data, k) ? this.data[k] : null; },
+    setItem(k, v) { this.data[k] = String(v); },
+    removeItem(k) { delete this.data[k]; }
+  };
+  const deviceBStore = {
+    data: {
+      yds_anat_2026_progress: JSON.stringify({ 1: { answered: { 0: 0, 1: 1, 2: 3 }, score: 3, total: 24 } }),
+      yds_portal_activity_v1: JSON.stringify({ dailyGoal: 30, days: { '2026-11-28': { answered: 15, correct: 12 } } })
+    },
+    getItem(k) { return Object.prototype.hasOwnProperty.call(this.data, k) ? this.data[k] : null; },
+    setItem(k, v) { this.data[k] = String(v); },
+    removeItem(k) { delete this.data[k]; }
+  };
+
+  const exportedFromA = PortalSync.collectExportPayload(deviceAStore);
+  const transferCode = await PortalSync.encodeTransferCode(exportedFromA);
+  assert.ok(transferCode.startsWith('KHYS1:') || transferCode.startsWith('KHYS0:'), 'Transfer code prefix invalid');
+  const decodedOnB = await PortalSync.decodeTransferCode(`https://example.com/#khys-sync=${encodeURIComponent(transferCode)}`);
+  const previewOnB = PortalSync.previewImportPayload(decodedOnB, deviceBStore);
+  assert.equal(previewOnB.incAnsweredTotal, 2);
+  assert.equal(previewOnB.curAnsweredTotal, 3);
+
+  PortalSync.applyImportPayload(decodedOnB, 'merge', deviceBStore);
+  const physioAfterMerge = readSubjectProgress(PORTAL_SUBJECTS.find((s) => s.slug === 'sinh-ly'), deviceBStore);
+  const anatAfterMerge = readSubjectProgress(PORTAL_SUBJECTS.find((s) => s.slug === 'giai-phau'), deviceBStore);
+  assert.equal(physioAfterMerge.answeredQuestions, 2, 'Merge must keep incoming sinh-ly answers');
+  assert.equal(anatAfterMerge.answeredQuestions, 3, 'Merge must preserve existing giai-phau answers');
+
+  const qrSvg = PortalSync.generateQrSvg('https://example.com/#khys-sync=KHYS1:test');
+  assert.ok(qrSvg && qrSvg.includes('<svg') && qrSvg.includes('<path'), 'QR SVG should render cleanly');
 
   // Verify each module's references, assets, and portal return navigation
   let totalAssetsChecked = 0;

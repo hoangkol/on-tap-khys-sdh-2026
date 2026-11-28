@@ -33,6 +33,9 @@
         </div>
       </div>
       <div class="header-actions">
+        <button class="btn btn-sync-device" id="btnOpenSyncModal" type="button" title="Chuyển đổi nhanh tiến độ sang điện thoại hoặc máy tính khác">
+          🔄 <span class="hide-xs">Chuyển thiết bị</span>
+        </button>
         <button class="btn btn-install" id="btnInstallPwa" type="button" title="Cài đặt thành ứng dụng độc lập trên thiết bị">
           📲 <span class="hide-xs">Cài đặt App</span>
         </button>
@@ -104,6 +107,9 @@
           <p class="analytics-subtitle">Theo dõi biểu đồ 7 ngày gần nhất, độ chính xác từng môn và gợi ý trọng tâm ôn tiếp</p>
         </div>
         <div class="analytics-controls">
+          <button type="button" class="btn btn-outline btn-sm" id="btnQuickSyncFromPanel" title="Xuất mã, link QR hoặc file để chuyển tiến độ sang thiết bị khác">
+            🔄 Chuyển thiết bị
+          </button>
           <label class="goal-picker" for="dailyGoalSelect">
             <span>Mục tiêu ngày:</span>
             <select id="dailyGoalSelect" aria-label="Chọn mục tiêu số câu mỗi ngày">
@@ -182,11 +188,151 @@
   <footer class="portal-footer">
     <div class="portal-shell footer-inner">
       <span>Cổng Ôn Tập Cao Học Khoa Học Y Sinh (KHYS) • ĐH Y Dược TP.HCM • <strong>by hoangkol 2026</strong></span>
-      <span>Chế độ lưu trữ: Cục bộ trên trình duyệt thiết bị (không đồng bộ máy chủ)</span>
+      <span>Lưu cục bộ trên trình duyệt • Hỗ trợ chuyển nhanh tiến độ đa thiết bị (Mã/QR/JSON/Cloud)</span>
     </div>
   </footer>
 
+  <!-- MODAL CHUYỂN ĐỔI & ĐỒNG BỘ TIẾN ĐỘ ĐA THIẾT BỊ -->
+  <div class="sync-modal-backdrop hidden" id="syncModalBackdrop" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="syncModalTitle">
+    <div class="sync-modal-dialog">
+      <div class="sync-modal-header">
+        <div>
+          <h2 id="syncModalTitle">🔄 Chuyển đổi nhanh tiến độ giữa các thiết bị</h2>
+          <p class="sync-modal-sub">Đồng bộ tiến độ 7 môn, tỷ lệ đúng/sai và chuỗi ngày Streak sang máy khác</p>
+        </div>
+        <button type="button" class="pwa-modal-close" id="btnCloseSyncModal" aria-label="Đóng hộp thoại đồng bộ">✕</button>
+      </div>
+
+      <div class="sync-tabs" role="tablist" aria-label="Phương thức chuyển đổi tiến độ">
+        <button type="button" class="sync-tab active" data-sync-tab="transfer" role="tab" aria-selected="true">🔗 Mã / Link &amp; QR</button>
+        <button type="button" class="sync-tab" data-sync-tab="file" role="tab" aria-selected="false">💾 File JSON</button>
+        <button type="button" class="sync-tab" data-sync-tab="cloud" role="tab" aria-selected="false">☁️ Cloud Supabase</button>
+      </div>
+
+      <div class="sync-modal-body">
+        <div class="sync-status-banner hidden" id="syncStatusBanner" role="status"></div>
+
+        <!-- TAB 1: MÃ / LINK & QR -->
+        <div class="sync-pane" id="syncPaneTransfer">
+          <div class="sync-two-col">
+            <div class="sync-box">
+              <h3>📤 Gửi từ thiết bị này</h3>
+              <p class="sync-hint">Tạo mã nén hoặc đường link gửi qua Zalo / Messenger / Email để mở thẳng trên điện thoại hoặc máy tính khác.</p>
+              <textarea id="syncGeneratedCode" class="sync-textarea" rows="3" readonly aria-label="Mã chuyển đổi tiến độ"></textarea>
+              <div class="sync-btn-row">
+                <button type="button" class="btn btn-primary-solid" id="btnCopySyncLink">🔗 Copy Link chuyển nhanh</button>
+                <button type="button" class="btn btn-outline" id="btnCopySyncCode">📋 Copy Mã</button>
+              </div>
+              <div class="sync-meta-line" id="syncCodeStats">Đang tạo mã nén...</div>
+              <div class="sync-qr-box" id="syncQrBox"></div>
+            </div>
+
+            <div class="sync-box">
+              <h3>📥 Nhận từ thiết bị khác</h3>
+              <p class="sync-hint">Dán <strong>Mã chuyển nhanh</strong> (<code>KHYS1:...</code>) hoặc toàn bộ <strong>Link</strong> nhận được từ máy kia vào đây:</p>
+              <textarea id="syncPasteInput" class="sync-textarea" rows="4" placeholder="Dán mã KHYS1:... hoặc link https://.../#khys-sync=... vào đây"></textarea>
+              <div class="sync-btn-row">
+                <button type="button" class="btn btn-primary-solid" id="btnDecodePastedSync">🔍 Kiểm tra &amp; Xem trước</button>
+                <button type="button" class="btn btn-outline" id="btnClearPastedSync">Xóa</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 2: FILE JSON -->
+        <div class="sync-pane hidden" id="syncPaneFile">
+          <div class="sync-two-col">
+            <div class="sync-box">
+              <h3>📤 Xuất file sao lưu (.json)</h3>
+              <p class="sync-hint">Tải toàn bộ tiến độ 7 môn và chuỗi ngày Streak thành một tệp <code>.json</code> để lưu trữ an toàn hoặc gửi sang máy khác.</p>
+              <button type="button" class="btn btn-primary-solid" id="btnExportJsonFile">⬇️ Tải xuống file sao lưu (.json)</button>
+            </div>
+
+            <div class="sync-box">
+              <h3>📥 Nhập từ file sao lưu (.json)</h3>
+              <p class="sync-hint">Chọn tệp <code>KHYS_Progress_*.json</code> đã xuất từ thiết bị khác để xem trước và gộp/khôi phục.</p>
+              <label class="sync-dropzone" id="syncFileDropzone" for="syncFileInput">
+                <span class="sync-drop-icon">📂</span>
+                <span><strong>Chọn tệp .json</strong> hoặc kéo thả vào đây</span>
+                <input type="file" id="syncFileInput" accept=".json,application/json" class="sr-only" />
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 3: CLOUD SUPABASE -->
+        <div class="sync-pane hidden" id="syncPaneCloud">
+          <div class="sync-box">
+            <h3>☁️ Đồng bộ Cloud Supabase (Tùy chọn đa thiết bị 1 chạm)</h3>
+            <p class="sync-hint">Kết nối kho Supabase cá nhân (tương tự các dự án quản lý khác) để đẩy và kéo tiến độ giữa các thiết bị bất kỳ lúc nào.</p>
+            <div class="sync-form-grid">
+              <label class="sync-field">
+                <span>Supabase Project URL</span>
+                <input type="url" id="supaUrlInput" placeholder="https://your-project.supabase.co" autocomplete="off" />
+              </label>
+              <label class="sync-field">
+                <span>Supabase Anon Public Key</span>
+                <input type="password" id="supaKeyInput" placeholder="eyJhbGciOi..." autocomplete="off" />
+              </label>
+              <label class="sync-field sync-field-full">
+                <span>Mã Hồ Sơ Cá Nhân (Sync ID)</span>
+                <div class="sync-id-row">
+                  <input type="text" id="supaSyncIdInput" placeholder="VD: hoangkol-khys-2026" autocomplete="off" />
+                  <button type="button" class="btn btn-outline btn-sm" id="btnGenSyncId">🎲 Tạo mã</button>
+                </div>
+              </label>
+            </div>
+
+            <div class="sync-btn-row">
+              <button type="button" class="btn btn-primary-solid" id="btnSupaPush">☁️ Đẩy tiến độ lên Cloud</button>
+              <button type="button" class="btn btn-outline" id="btnSupaPull">⬇️ Tải &amp; Xem trước từ Cloud</button>
+              <button type="button" class="btn btn-outline" id="btnSupaSaveCfg">💾 Lưu cấu hình</button>
+            </div>
+
+            <details class="sync-sql-details">
+              <summary>📋 Xem câu lệnh SQL tạo bảng <code>khys_sync_profiles</code> trên Supabase (chỉ chạy 1 lần)</summary>
+              <div class="sync-sql-wrap">
+                <pre id="supaSqlPreview"></pre>
+                <button type="button" class="btn btn-outline btn-sm" id="btnCopySupaSql">📋 Copy SQL</button>
+              </div>
+            </details>
+          </div>
+        </div>
+
+        <!-- UNIFIED IMPORT PREVIEW PANEL -->
+        <div class="sync-preview-pane hidden" id="syncPreviewPane">
+          <div class="sync-preview-head">
+            <div>
+              <h3>🔎 Xem trước dữ liệu sắp nhập</h3>
+              <p id="syncPreviewSummary" class="sync-hint"></p>
+            </div>
+            <button type="button" class="btn btn-outline btn-sm" id="btnCancelPreview">← Quay lại</button>
+          </div>
+
+          <div class="sync-preview-table-wrap">
+            <table class="sync-preview-table">
+              <thead>
+                <tr>
+                  <th>Môn học</th>
+                  <th>Máy hiện tại</th>
+                  <th>Dữ liệu nhận về</th>
+                </tr>
+              </thead>
+              <tbody id="syncPreviewTbody"></tbody>
+            </table>
+          </div>
+
+          <div class="sync-preview-actions">
+            <button type="button" class="btn btn-primary-solid" id="btnApplySyncMerge">🔀 Gộp thông minh (Giữ điểm cao nhất cả 2 máy)</button>
+            <button type="button" class="btn btn-danger-outline" id="btnApplySyncOverwrite">♻️ Ghi đè hoàn toàn</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="./shared/portal-config.js"></script>
+  <script src="./shared/portal-sync.js"></script>
   <script src="./shared/pwa.js"></script>
   <script src="app.js"></script>
 </body>

@@ -11,13 +11,18 @@
   const readActivity = window.readPortalActivity;
   const computeStreak = window.computeStreakStats;
   const saveDailyGoal = window.setPortalDailyGoal;
+  const SYNC = window.PortalSync || null;
   const ANALYTICS_COLLAPSED_KEY = 'yds_portal_analytics_collapsed';
 
   const state = {
     theme: 'light',
     filter: 'all',
     search: '',
-    analyticsCollapsed: false
+    analyticsCollapsed: false,
+    syncTab: 'transfer',
+    pendingPayload: null,
+    generatedCode: '',
+    generatedLink: ''
   };
 
   function safeGetStorage(key) {
@@ -494,9 +499,403 @@
       });
     }
 
+    bindSyncModalEvents();
+
     window.addEventListener('storage', renderCards);
     window.addEventListener('pageshow', renderCards);
     window.addEventListener('focus', renderCards);
+  }
+
+  // ================= CROSS-DEVICE SYNC MODAL CONTROLLER =================
+  function setSyncStatus(type, msg) {
+    const banner = document.getElementById('syncStatusBanner');
+    if (!banner) return;
+    if (!msg) {
+      banner.className = 'sync-status-banner hidden';
+      banner.textContent = '';
+      return;
+    }
+    banner.className = `sync-status-banner sync-status-${type || 'info'}`;
+    banner.textContent = msg;
+  }
+
+  function switchSyncTab(tabName) {
+    state.syncTab = tabName;
+    document.querySelectorAll('.sync-tab').forEach((btn) => {
+      const active = btn.getAttribute('data-sync-tab') === tabName;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-selected', String(active));
+    });
+    const panes = {
+      transfer: document.getElementById('syncPaneTransfer'),
+      file: document.getElementById('syncPaneFile'),
+      cloud: document.getElementById('syncPaneCloud')
+    };
+    Object.keys(panes).forEach((k) => {
+      if (panes[k]) panes[k].classList.toggle('hidden', k !== tabName || Boolean(state.pendingPayload));
+    });
+  }
+
+  function showSyncPreview(payload, sourceLabel) {
+    if (!SYNC) return;
+    const preview = SYNC.previewImportPayload(payload);
+    state.pendingPayload = payload;
+
+    const previewPane = document.getElementById('syncPreviewPane');
+    const summaryEl = document.getElementById('syncPreviewSummary');
+    const tbody = document.getElementById('syncPreviewTbody');
+
+    ['syncPaneTransfer', 'syncPaneFile', 'syncPaneCloud'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.classList.add('hidden');
+    });
+    if (previewPane) previewPane.classList.remove('hidden');
+
+    let timeText = '';
+    try {
+      timeText = new Date(preview.exportedAt).toLocaleString('vi-VN');
+    } catch (e) {
+      timeText = preview.exportedAt;
+    }
+
+    if (summaryEl) {
+      summaryEl.innerHTML = `${escapeHtml(sourceLabel || 'Dữ liệu nhận về')} (${escapeHtml(timeText)}) • <strong>${preview.incCompletedTotal} bài</strong> • <strong>${formatNumber(preview.incAnsweredTotal)} câu</strong> (Đúng ${preview.incAccuracy}%)${preview.incDaysCount ? ` • ${preview.incDaysCount} ngày Streak` : ''}`;
+    }
+
+    if (tbody) {
+      tbody.innerHTML = preview.rows.map((r) => `
+        <tr>
+          <td>
+            <span class="mastery-dot" style="background:${escapeHtml(r.accent)};margin-right:6px;"></span>
+            <strong>${escapeHtml(r.shortName)}</strong>
+          </td>
+          <td>${r.curCompleted}/${r.totalLessons} bài • ${formatNumber(r.curAnswered)} câu</td>
+          <td><strong>${r.incCompleted}/${r.totalLessons} bài</strong> • ${formatNumber(r.incAnswered)} câu ${r.incAnswered > 0 ? `(${r.incAccuracy}%)` : ''}</td>
+        </tr>
+      `).join('');
+    }
+  }
+
+  function clearSyncPreview() {
+    state.pendingPayload = null;
+    const previewPane = document.getElementById('syncPreviewPane');
+    if (previewPane) previewPane.classList.add('hidden');
+    switchSyncTab(state.syncTab);
+  }
+
+  async function refreshGeneratedTransferCode() {
+    if (!SYNC) return;
+    const codeEl = document.getElementById('syncGeneratedCode');
+    const statsEl = document.getElementById('syncCodeStats');
+    const qrBox = document.getElementById('syncQrBox');
+    if (!codeEl) return;
+
+    try {
+      const payload = SYNC.collectExportPayload();
+      const rawLen = JSON.stringify(payload).length;
+      const code = await SYNC.encodeTransferCode(payload);
+      const baseUrl = `${window.location.origin}${window.location.pathname}`;
+      const shareUrl = `${baseUrl}#khys-sync=${encodeURIComponent(code)}`;
+
+      state.generatedCode = code;
+      state.generatedLink = shareUrl;
+      codeEl.value = code;
+
+      const ratio = rawLen > 0 ? Math.max(0, Math.round((1 - code.length / rawLen) * 100)) : 0;
+      if (statsEl) {
+        statsEl.textContent = `Kích thước mã: ${formatNumber(code.length)} ký tự (nén ${ratio}% từ ${formatNumber(rawLen)} bytes) • ${payload.meta.answeredQuestions} câu đã trả lời.`;
+      }
+
+      if (qrBox) {
+        const qrTarget = shareUrl.length <= 920 ? shareUrl : code;
+        const qrSvg = qrTarget.length <= 920 ? SYNC.generateQrSvg(qrTarget) : null;
+        if (qrSvg) {
+          qrBox.innerHTML = `
+            <div class="sync-qr-frame">${qrSvg}</div>
+            <div class="sync-qr-caption">📱 Quét bằng camera điện thoại để mở &amp; nhập tiến độ ngay</div>
+          `;
+        } else {
+          qrBox.innerHTML = `
+            <div class="sync-qr-fallback">
+              📦 Gói tiến độ khá lớn (${formatNumber(code.length)} ký tự) — hãy nhấn <strong>Copy Link chuyển nhanh</strong> gửi qua Zalo/Messenger hoặc dùng tab <strong>File JSON</strong> / <strong>Cloud Supabase</strong>.
+            </div>
+          `;
+        }
+      }
+    } catch (err) {
+      if (statsEl) statsEl.textContent = `Không thể tạo mã: ${err.message}`;
+    }
+  }
+
+  function openSyncModal(defaultTab) {
+    const backdrop = document.getElementById('syncModalBackdrop');
+    if (!backdrop) return;
+    setSyncStatus('', '');
+    if (!state.pendingPayload) {
+      switchSyncTab(defaultTab || state.syncTab || 'transfer');
+    }
+    backdrop.classList.remove('hidden');
+    backdrop.setAttribute('aria-hidden', 'false');
+    refreshGeneratedTransferCode();
+
+    if (SYNC) {
+      const cfg = SYNC.loadSupabaseConfig();
+      const uEl = document.getElementById('supaUrlInput');
+      const kEl = document.getElementById('supaKeyInput');
+      const iEl = document.getElementById('supaSyncIdInput');
+      const sqlEl = document.getElementById('supaSqlPreview');
+      if (uEl && !uEl.value) uEl.value = cfg.url;
+      if (kEl && !kEl.value) kEl.value = cfg.key;
+      if (iEl && !iEl.value) iEl.value = cfg.syncId;
+      if (sqlEl && !sqlEl.textContent) sqlEl.textContent = SYNC.SUPABASE_SETUP_SQL;
+    }
+  }
+
+  function closeSyncModal() {
+    const backdrop = document.getElementById('syncModalBackdrop');
+    if (!backdrop) return;
+    backdrop.classList.add('hidden');
+    backdrop.setAttribute('aria-hidden', 'true');
+    clearSyncPreview();
+    setSyncStatus('', '');
+  }
+
+  async function copyTextWithFeedback(text, btn, okLabel) {
+    if (!text) return;
+    const orig = btn ? btn.innerHTML : '';
+    try {
+      await navigator.clipboard.writeText(text);
+      if (btn) {
+        btn.innerHTML = okLabel;
+        setTimeout(() => { btn.innerHTML = orig; }, 1800);
+      }
+    } catch (e) {
+      setSyncStatus('info', 'Trình duyệt không cho phép copy tự động — hãy chọn toàn bộ ô mã và nhấn Ctrl+C.');
+    }
+  }
+
+  function handleJsonFile(file) {
+    if (!file || !SYNC) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const parsed = JSON.parse(String(ev.target && ev.target.result || ''));
+        const payload = SYNC.normalizeIncomingPayload(parsed);
+        setSyncStatus('', '');
+        showSyncPreview(payload, `Từ tệp: ${file.name}`);
+      } catch (err) {
+        setSyncStatus('error', `Không đọc được tệp JSON: ${err.message}`);
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  function bindSyncModalEvents() {
+    const btnOpen = document.getElementById('btnOpenSyncModal');
+    const btnOpenPanel = document.getElementById('btnQuickSyncFromPanel');
+    const btnClose = document.getElementById('btnCloseSyncModal');
+    const backdrop = document.getElementById('syncModalBackdrop');
+
+    if (btnOpen) btnOpen.addEventListener('click', () => openSyncModal('transfer'));
+    if (btnOpenPanel) btnOpenPanel.addEventListener('click', () => openSyncModal('transfer'));
+    if (btnClose) btnClose.addEventListener('click', closeSyncModal);
+    if (backdrop) {
+      backdrop.addEventListener('click', (e) => {
+        if (e.target === backdrop) closeSyncModal();
+      });
+    }
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && backdrop && !backdrop.classList.contains('hidden')) {
+        closeSyncModal();
+      }
+    });
+
+    document.querySelectorAll('.sync-tab').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        state.pendingPayload = null;
+        const previewPane = document.getElementById('syncPreviewPane');
+        if (previewPane) previewPane.classList.add('hidden');
+        switchSyncTab(btn.getAttribute('data-sync-tab') || 'transfer');
+      });
+    });
+
+    const btnCopyLink = document.getElementById('btnCopySyncLink');
+    if (btnCopyLink) {
+      btnCopyLink.addEventListener('click', () => copyTextWithFeedback(state.generatedLink, btnCopyLink, '✓ Đã copy Link!'));
+    }
+
+    const btnCopyCode = document.getElementById('btnCopySyncCode');
+    if (btnCopyCode) {
+      btnCopyCode.addEventListener('click', () => copyTextWithFeedback(state.generatedCode, btnCopyCode, '✓ Đã copy Mã!'));
+    }
+
+    const btnDecode = document.getElementById('btnDecodePastedSync');
+    const pasteEl = document.getElementById('syncPasteInput');
+    if (btnDecode && pasteEl) {
+      btnDecode.addEventListener('click', async () => {
+        if (!SYNC) return;
+        try {
+          const payload = await SYNC.decodeTransferCode(pasteEl.value);
+          setSyncStatus('', '');
+          showSyncPreview(payload, 'Từ mã / link dán vào');
+        } catch (err) {
+          setSyncStatus('error', err.message);
+        }
+      });
+    }
+
+    const btnClearPaste = document.getElementById('btnClearPastedSync');
+    if (btnClearPaste && pasteEl) {
+      btnClearPaste.addEventListener('click', () => {
+        pasteEl.value = '';
+        setSyncStatus('', '');
+      });
+    }
+
+    const btnExportFile = document.getElementById('btnExportJsonFile');
+    if (btnExportFile && SYNC) {
+      btnExportFile.addEventListener('click', () => {
+        const payload = SYNC.collectExportPayload();
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 16);
+        const filename = `KHYS_Progress_${stamp}.json`;
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        setSyncStatus('success', `Đã tải xuống tệp ${filename} (${payload.meta.answeredQuestions} câu).`);
+      });
+    }
+
+    const fileInput = document.getElementById('syncFileInput');
+    const dropzone = document.getElementById('syncFileDropzone');
+    if (fileInput) {
+      fileInput.addEventListener('change', (e) => {
+        const f = e.target.files && e.target.files[0];
+        if (f) handleJsonFile(f);
+        e.target.value = '';
+      });
+    }
+    if (dropzone) {
+      dropzone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropzone.classList.add('dragover');
+      });
+      dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+      dropzone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropzone.classList.remove('dragover');
+        const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+        if (f) handleJsonFile(f);
+      });
+    }
+
+    // Cloud Supabase handlers
+    const uEl = document.getElementById('supaUrlInput');
+    const kEl = document.getElementById('supaKeyInput');
+    const iEl = document.getElementById('supaSyncIdInput');
+    const btnGenId = document.getElementById('btnGenSyncId');
+    const btnSaveSupa = document.getElementById('btnSupaSaveCfg');
+    const btnPushSupa = document.getElementById('btnSupaPush');
+    const btnPullSupa = document.getElementById('btnSupaPull');
+    const btnCopySql = document.getElementById('btnCopySupaSql');
+
+    if (btnGenId && iEl) {
+      btnGenId.addEventListener('click', () => {
+        const rand = Math.random().toString(36).slice(2, 7);
+        iEl.value = `khys2026-${rand}`;
+      });
+    }
+    if (btnSaveSupa && SYNC) {
+      btnSaveSupa.addEventListener('click', () => {
+        SYNC.saveSupabaseConfig({ url: uEl.value, key: kEl.value, syncId: iEl.value });
+        setSyncStatus('success', 'Đã lưu cấu hình Supabase trên trình duyệt này.');
+      });
+    }
+    if (btnCopySql && SYNC) {
+      btnCopySql.addEventListener('click', () => copyTextWithFeedback(SYNC.SUPABASE_SETUP_SQL, btnCopySql, '✓ Đã copy SQL!'));
+    }
+    if (btnPushSupa && SYNC) {
+      btnPushSupa.addEventListener('click', async () => {
+        try {
+          setSyncStatus('info', '⏳ Đang đẩy tiến độ lên Supabase Cloud...');
+          SYNC.saveSupabaseConfig({ url: uEl.value, key: kEl.value, syncId: iEl.value });
+          const payload = SYNC.collectExportPayload();
+          const res = await SYNC.supabasePush(uEl.value, kEl.value, iEl.value, payload);
+          setSyncStatus('success', `☁️ Đã đẩy lên Cloud thành công (Hồ sơ: ${res.syncId} • ${payload.meta.answeredQuestions} câu).`);
+        } catch (err) {
+          setSyncStatus('error', err.message);
+        }
+      });
+    }
+    if (btnPullSupa && SYNC) {
+      btnPullSupa.addEventListener('click', async () => {
+        try {
+          setSyncStatus('info', '⏳ Đang tải tiến độ từ Supabase Cloud...');
+          SYNC.saveSupabaseConfig({ url: uEl.value, key: kEl.value, syncId: iEl.value });
+          const res = await SYNC.supabasePull(uEl.value, kEl.value, iEl.value);
+          setSyncStatus('', '');
+          showSyncPreview(res.payload, `Từ Cloud Supabase (${iEl.value.trim()})`);
+        } catch (err) {
+          setSyncStatus('error', err.message);
+        }
+      });
+    }
+
+    // Preview confirmation buttons
+    const btnCancelPreview = document.getElementById('btnCancelPreview');
+    const btnApplyMerge = document.getElementById('btnApplySyncMerge');
+    const btnApplyOverwrite = document.getElementById('btnApplySyncOverwrite');
+
+    if (btnCancelPreview) btnCancelPreview.addEventListener('click', clearSyncPreview);
+    if (btnApplyMerge && SYNC) {
+      btnApplyMerge.addEventListener('click', () => {
+        if (!state.pendingPayload) return;
+        SYNC.applyImportPayload(state.pendingPayload, 'merge');
+        clearSyncPreview();
+        applyTheme(safeGetStorage(META.portalThemeKey) || state.theme);
+        renderCards();
+        refreshGeneratedTransferCode();
+        setSyncStatus('success', '✅ Đã gộp thông minh tiến độ từ thiết bị khác! Điểm cao nhất của cả 2 máy đã được giữ lại.');
+      });
+    }
+    if (btnApplyOverwrite && SYNC) {
+      btnApplyOverwrite.addEventListener('click', () => {
+        if (!state.pendingPayload) return;
+        if (!window.confirm('Ghi đè sẽ thay thế toàn bộ tiến độ hiện có trên máy này bằng dữ liệu mới. Bạn chắc chắn muốn tiếp tục?')) {
+          return;
+        }
+        SYNC.applyImportPayload(state.pendingPayload, 'overwrite');
+        clearSyncPreview();
+        applyTheme(safeGetStorage(META.portalThemeKey) || 'light');
+        renderCards();
+        refreshGeneratedTransferCode();
+        setSyncStatus('success', '✅ Đã khôi phục (ghi đè) toàn bộ tiến độ từ thiết bị khác thành công!');
+      });
+    }
+  }
+
+  async function checkIncomingHashSync() {
+    if (!SYNC) return;
+    const hash = window.location.hash || '';
+    const m = hash.match(/khys-sync=([^&]+)/);
+    if (!m) return;
+    try {
+      const token = decodeURIComponent(m[1]);
+      const payload = await SYNC.decodeTransferCode(token);
+      if (window.history && typeof window.history.replaceState === 'function') {
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      }
+      openSyncModal('transfer');
+      showSyncPreview(payload, 'Từ đường dẫn chuyển nhanh');
+    } catch (err) {
+      openSyncModal('transfer');
+      setSyncStatus('error', `Link chuyển nhanh không hợp lệ: ${err.message}`);
+    }
   }
 
   function init() {
@@ -505,6 +904,7 @@
     applyAnalyticsCollapsed(safeGetStorage(ANALYTICS_COLLAPSED_KEY) === '1');
     renderCards();
     bindEvents();
+    checkIncomingHashSync();
   }
 
   if (document.readyState === 'loading') {
