@@ -4,7 +4,7 @@
 // ==========================================================================
 
 const CACHE_PREFIX = 'khys-yds-2026-';
-const CACHE_NAME = `${CACHE_PREFIX}v4`;
+const CACHE_NAME = `${CACHE_PREFIX}v5`;
 const SCOPE_URL = self.registration.scope;
 
 const CORE_ASSETS = [
@@ -15,6 +15,7 @@ const CORE_ASSETS = [
   './manifest.webmanifest',
   './shared/portal-config.js',
   './shared/portal-sync.js',
+  './shared/portal-reminders.js',
   './shared/portal-nav.css',
   './shared/pwa.js',
   './icons/logo.svg',
@@ -153,4 +154,27 @@ self.addEventListener('fetch', (event) => {
   } else {
     event.respondWith(networkFirst(request, url));
   }
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const relUrl = (event.notification.data && event.notification.data.url) || './';
+  const targetUrl = new URL(relUrl, SCOPE_URL).href;
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientsList) => {
+      for (const client of clientsList) {
+        if (client.url.startsWith(SCOPE_URL) && 'focus' in client) {
+          if ('navigate' in client && client.url !== targetUrl) {
+            return client.navigate(targetUrl).then((c) => (c ? c.focus() : client.focus()));
+          }
+          return client.focus();
+        }
+      }
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(targetUrl);
+      }
+      return null;
+    })
+  );
 });

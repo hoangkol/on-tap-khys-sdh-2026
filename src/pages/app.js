@@ -11,7 +11,9 @@
   const readActivity = window.readPortalActivity;
   const computeStreak = window.computeStreakStats;
   const saveDailyGoal = window.setPortalDailyGoal;
+  const saveMinutesGoal = window.setPortalMinutesGoal;
   const SYNC = window.PortalSync || null;
+  const REMINDERS = window.PortalReminders || null;
   const ANALYTICS_COLLAPSED_KEY = 'yds_portal_analytics_collapsed';
 
   const state = {
@@ -166,7 +168,7 @@
       elGoalFill.style.width = `${streakStats.goalPercent}%`;
     }
     if (elTodayGoalMeta) {
-      elTodayGoalMeta.textContent = `Hôm nay: ${streakStats.todayAnswered}/${streakStats.dailyGoal} câu • Kỷ lục: ${streakStats.bestStreak} ngày`;
+      elTodayGoalMeta.textContent = `Hôm nay: ${streakStats.todayAnswered}/${streakStats.dailyGoal} câu (${streakStats.todayStudyMinutes || 0}p) • Kỷ lục: ${streakStats.bestStreak} ngày`;
     }
     if (elInProgress) elInProgress.textContent = String(inProgressCount);
     if (elCompletedCount) elCompletedCount.textContent = String(completedCount);
@@ -233,17 +235,21 @@
     `;
 
     if (noteEl) {
+      const weekMin = streakStats.weekStudyMinutes || 0;
+      const expText = weekMin > 0 ? ` • Thời gian tiếp xúc: <strong>${weekMin} phút</strong>` : '';
       if (weekTotal > 0) {
-        noteEl.innerHTML = `7 ngày qua: <strong>${formatNumber(weekTotal)} câu</strong> (${formatNumber(weekCorrect)} đúng • <strong>${weekAcc}%</strong> chính xác) • Đường đứt nét = mục tiêu ${streakStats.dailyGoal} câu/ngày.`;
+        noteEl.innerHTML = `7 ngày qua: <strong>${formatNumber(weekTotal)} câu</strong> (${formatNumber(weekCorrect)} đúng • <strong>${weekAcc}%</strong>)${expText} • Đứt nét = mục tiêu ${streakStats.dailyGoal} câu/ngày.`;
+      } else if (weekMin > 0) {
+        noteEl.innerHTML = `7 ngày qua bạn đã dành <strong>${weekMin} phút</strong> đọc tài liệu/Atlas. Làm thêm câu KSA để cập nhật biểu đồ cột!`;
       } else if (totalAnsweredOverall > 0) {
         noteEl.textContent = `Bạn đã có ${formatNumber(totalAnsweredOverall)} câu từ trước. Làm thêm câu mới hôm nay để bắt đầu ghi nhận chuỗi Streak và biểu đồ 7 ngày!`;
       } else {
-        noteEl.textContent = 'Hãy làm vài câu trắc nghiệm ở bất kỳ môn nào — biểu đồ nhịp độ 7 ngày và chuỗi Streak sẽ tự động cập nhật tại đây.';
+        noteEl.textContent = 'Hãy làm vài câu trắc nghiệm ở bất kỳ môn nào — biểu đồ nhịp độ 7 ngày, thời gian tiếp xúc và chuỗi Streak sẽ tự động cập nhật tại đây.';
       }
     }
   }
 
-  function renderMasteryBreakdown(snapshots) {
+  function renderMasteryBreakdown(snapshots, streakStats, activity) {
     const listEl = document.getElementById('subjectMasteryList');
     const pillEl = document.getElementById('masteredOverviewPill');
     const focusEl = document.getElementById('nextFocusBox');
@@ -254,8 +260,11 @@
       pillEl.textContent = `${totalMastered}/${totalLessons} bài đạt chuẩn (≥75%)`;
     }
 
+    const exposureMap = (activity && activity.subjectExposure) || {};
     if (listEl) {
       listEl.innerHTML = snapshots.map(({ subject, progress }) => {
+        const expSec = Number((exposureMap[subject.slug] && exposureMap[subject.slug].totalSeconds) || 0);
+        const expText = REMINDERS && expSec > 0 ? REMINDERS.formatDurationShort(expSec) : '';
         const accBadge = progress.answeredQuestions > 0
           ? `<span class="acc-pill ${getAccuracyTone(progress.accuracy, progress.answeredQuestions)}">${progress.accuracy}% đúng</span>`
           : '<span class="acc-pill acc-none">Chưa làm</span>';
@@ -268,6 +277,7 @@
                 <span>${escapeHtml(subject.shortName)}</span>
               </span>
               <span class="mastery-metrics">
+                ${expText ? `<span class="exposure-chip" title="Tổng thời gian tiếp xúc">⏱️ ${escapeHtml(expText)}</span>` : ''}
                 <span>${progress.completedLessons}/${progress.totalLessons} bài</span>
                 ${accBadge}
               </span>
@@ -281,32 +291,18 @@
     }
 
     if (focusEl) {
-      const inProg = snapshots
-        .filter((x) => x.progress.status === 'in-progress')
-        .sort((a, b) => a.progress.accuracy - b.progress.accuracy || a.progress.percent - b.progress.percent);
-      const notStarted = snapshots.filter((x) => x.progress.status === 'not-started');
-      const recommended = inProg[0] || notStarted[0] || snapshots[0];
-
-      if (recommended) {
-        const { subject, progress } = recommended;
-        let reason;
-        if (progress.status === 'in-progress') {
-          reason = progress.accuracy < 75
-            ? `Đang học dở (${progress.completedLessons}/${progress.totalLessons} bài, độ chính xác ${progress.accuracy}%) — nên củng cố ngay.`
-            : `Đang tiến triển tốt (${progress.completedLessons}/${progress.totalLessons} bài, ${progress.accuracy}% đúng) — hoàn tất nốt môn này.`;
-        } else if (progress.status === 'completed') {
-          reason = 'Bạn đã hoàn thành toàn bộ 7 môn! Có thể vào phòng thi thử để tổng hợp kiến thức.';
-        } else {
-          reason = `Môn đề xuất bắt đầu (${subject.lessonsCount} bài • ${subject.questionsCount} câu KSA).`;
-        }
-
+      const rec = REMINDERS
+        ? REMINDERS.buildSmartRecommendation(snapshots, streakStats, activity)
+        : null;
+      if (rec) {
+        const reasonText = (rec.reasons && rec.reasons[0]) ? rec.reasons[0] : rec.body;
         focusEl.innerHTML = `
           <div class="next-focus-info">
-            <div class="next-focus-label">💡 Đề xuất ôn tập tiếp theo</div>
-            <div class="next-focus-title">${escapeHtml(subject.name)}</div>
-            <div class="next-focus-reason">${escapeHtml(reason)}</div>
+            <div class="next-focus-label">💡 Gợi ý học tập thông minh</div>
+            <div class="next-focus-title">${escapeHtml(rec.headline)}</div>
+            <div class="next-focus-reason">${escapeHtml(rec.body)} (${escapeHtml(reasonText)})</div>
           </div>
-          <a class="btn-focus-go" href="${escapeHtml(subject.href)}">Vào ôn →</a>
+          <a class="btn-focus-go" href="${escapeHtml(rec.ctaHref)}">${escapeHtml(rec.ctaLabel)}</a>
         `;
       }
     }
@@ -366,7 +362,8 @@
     const totalAnsweredOverall = snapshots.reduce((s, item) => s + item.progress.answeredQuestions, 0);
     renderSummary(snapshots, streakStats);
     renderWeeklyChart(streakStats, totalAnsweredOverall);
-    renderMasteryBreakdown(snapshots);
+    renderMasteryBreakdown(snapshots, streakStats, activity);
+    syncReminderDot();
 
     const visible = snapshots.filter(matchesFilter);
     if (visible.length === 0) {
@@ -500,10 +497,273 @@
     }
 
     bindSyncModalEvents();
+    bindReminderEvents();
 
     window.addEventListener('storage', renderCards);
     window.addEventListener('pageshow', renderCards);
-    window.addEventListener('focus', renderCards);
+    window.addEventListener('focus', () => {
+      renderCards();
+      evaluateSmartReminders();
+    });
+  }
+
+  // ================= SMART REMINDER & STUDY COACH CONTROLLER =================
+  function setRemStatus(type, msg) {
+    const el = document.getElementById('remStatusBanner');
+    if (!el) return;
+    if (!msg) {
+      el.className = 'sync-status-banner hidden';
+      el.textContent = '';
+      return;
+    }
+    el.className = `sync-status-banner sync-status-${type || 'info'}`;
+    el.textContent = msg;
+  }
+
+  function syncReminderDot() {
+    const dot = document.getElementById('headerReminderDot');
+    if (!dot || !REMINDERS) return;
+    const cfg = REMINDERS.loadReminderConfig();
+    const perm = REMINDERS.getPermissionState();
+    dot.classList.toggle('hidden', cfg.enabled && perm === 'granted');
+  }
+
+  function renderReminderModalData() {
+    if (!REMINDERS) return;
+    const snapshots = getSnapshots();
+    const activity = readActivity ? readActivity() : { days: {}, dailyGoal: 20, dailyMinutesGoal: 30 };
+    const streakStats = computeStreak ? computeStreak(activity) : {};
+    const cfg = REMINDERS.loadReminderConfig();
+    const rec = REMINDERS.buildSmartRecommendation(snapshots, streakStats, activity);
+
+    const permLabel = document.getElementById('remPermLabel');
+    const perm = REMINDERS.getPermissionState();
+    if (permLabel) {
+      permLabel.textContent = perm === 'granted'
+        ? '✅ Đã cấp quyền'
+        : (perm === 'denied' ? '🚫 Đang bị chặn' : (perm === 'unsupported' ? 'Không hỗ trợ' : '⏳ Chưa cấp quyền'));
+    }
+
+    const bestHourEl = document.getElementById('remBestHourLabel');
+    if (bestHourEl && rec.preferredHour) {
+      bestHourEl.textContent = rec.preferredHour.isLearned
+        ? `${rec.preferredHour.label} (Tự học từ bạn)`
+        : `${rec.preferredHour.label} (Mặc định)`;
+    }
+
+    const expEl = document.getElementById('remExposureLabel');
+    if (expEl) {
+      expEl.textContent = `Hôm nay ${streakStats.todayStudyMinutes || 0}p • 7 ngày ${streakStats.weekStudyMinutes || 0}p`;
+    }
+
+    const headEl = document.getElementById('remPreviewHeadline');
+    const bodyEl = document.getElementById('remPreviewBody');
+    const reasonsEl = document.getElementById('remPreviewReasons');
+    if (headEl) headEl.textContent = rec.headline;
+    if (bodyEl) bodyEl.textContent = rec.body;
+    if (reasonsEl) {
+      reasonsEl.innerHTML = (rec.reasons || []).map((r) => `<li>${escapeHtml(r)}</li>`).join('');
+    }
+
+    const enabledEl = document.getElementById('remEnabledToggle');
+    const modeEl = document.getElementById('remTimingMode');
+    const fixedEl = document.getElementById('remFixedTime');
+    const fixedWrap = document.getElementById('remFixedTimeWrap');
+    const freqEl = document.getElementById('remFrequency');
+    const minEl = document.getElementById('remMinutesGoal');
+
+    if (enabledEl) enabledEl.checked = cfg.enabled;
+    if (modeEl) modeEl.value = cfg.timingMode;
+    if (fixedEl) fixedEl.value = cfg.fixedTime;
+    if (fixedWrap) fixedWrap.classList.toggle('rem-field-muted', cfg.timingMode !== 'fixed');
+    if (freqEl) freqEl.value = cfg.frequency;
+    if (minEl && activity.dailyMinutesGoal) {
+      const mStr = String(activity.dailyMinutesGoal);
+      if ([...minEl.options].some((o) => o.value === mStr)) {
+        minEl.value = mStr;
+      }
+    }
+  }
+
+  function openReminderModal() {
+    const backdrop = document.getElementById('reminderModalBackdrop');
+    if (!backdrop) return;
+    setRemStatus('', '');
+    renderReminderModalData();
+    backdrop.classList.remove('hidden');
+    backdrop.setAttribute('aria-hidden', 'false');
+  }
+
+  function closeReminderModal() {
+    const backdrop = document.getElementById('reminderModalBackdrop');
+    if (!backdrop) return;
+    backdrop.classList.add('hidden');
+    backdrop.setAttribute('aria-hidden', 'true');
+  }
+
+  function showStudyNudgeToast(rec) {
+    const toast = document.getElementById('studyNudgeToast');
+    const titleEl = document.getElementById('nudgeTitle');
+    const bodyEl = document.getElementById('nudgeBody');
+    const ctaEl = document.getElementById('nudgeCtaLink');
+    if (!toast || !rec) return;
+
+    if (titleEl) titleEl.textContent = rec.notifTitle || '🔔 Gợi ý ôn tập';
+    if (bodyEl) bodyEl.textContent = rec.body || '';
+    if (ctaEl) {
+      ctaEl.href = rec.ctaHref || './';
+      ctaEl.textContent = rec.ctaLabel || 'Vào ôn ngay →';
+    }
+    toast.classList.remove('hidden');
+  }
+
+  async function evaluateSmartReminders() {
+    if (!REMINDERS) return;
+    const snapshots = getSnapshots();
+    const activity = readActivity ? readActivity() : {};
+    const streakStats = computeStreak ? computeStreak(activity) : {};
+    const cfg = REMINDERS.loadReminderConfig();
+    const check = REMINDERS.shouldTriggerReminder(cfg, streakStats, activity);
+    if (!check.should) return;
+
+    const rec = REMINDERS.buildSmartRecommendation(snapshots, streakStats, activity);
+    const nowIso = new Date().toISOString();
+    REMINDERS.saveReminderConfig({
+      lastNotifiedAt: nowIso,
+      lastNotifiedDate: streakStats.todayKey,
+      lastNotifiedSlot: check.slot
+    });
+
+    const sentOs = await REMINDERS.sendBrowserNotification(rec);
+    showStudyNudgeToast(rec);
+    if (!sentOs) {
+      syncReminderDot();
+    }
+  }
+
+  function bindReminderEvents() {
+    const btnOpen = document.getElementById('btnOpenReminderModal');
+    const btnOpenPanel = document.getElementById('btnOpenReminderFromPanel');
+    const btnClose = document.getElementById('btnCloseReminderModal');
+    const backdrop = document.getElementById('reminderModalBackdrop');
+    const modeEl = document.getElementById('remTimingMode');
+    const fixedWrap = document.getElementById('remFixedTimeWrap');
+
+    if (btnOpen) btnOpen.addEventListener('click', openReminderModal);
+    if (btnOpenPanel) btnOpenPanel.addEventListener('click', openReminderModal);
+    if (btnClose) btnClose.addEventListener('click', closeReminderModal);
+    if (backdrop) {
+      backdrop.addEventListener('click', (e) => {
+        if (e.target === backdrop) closeReminderModal();
+      });
+    }
+    if (modeEl && fixedWrap) {
+      modeEl.addEventListener('change', () => {
+        fixedWrap.classList.toggle('rem-field-muted', modeEl.value !== 'fixed');
+      });
+    }
+
+    const btnSave = document.getElementById('btnSaveReminder');
+    if (btnSave && REMINDERS) {
+      btnSave.addEventListener('click', async () => {
+        const enabledEl = document.getElementById('remEnabledToggle');
+        const fixedEl = document.getElementById('remFixedTime');
+        const freqEl = document.getElementById('remFrequency');
+        const minEl = document.getElementById('remMinutesGoal');
+
+        const wantsEnabled = enabledEl ? enabledEl.checked : true;
+        if (saveMinutesGoal && minEl) {
+          saveMinutesGoal(minEl.value);
+        }
+
+        let permMsg = '';
+        if (wantsEnabled) {
+          const perm = await REMINDERS.requestNotificationPermission();
+          if (perm === 'granted') {
+            permMsg = 'Đã cấp quyền thông báo trình duyệt thành công!';
+          } else if (perm === 'denied') {
+            permMsg = 'Trình duyệt đang chặn quyền thông báo — vẫn bật nhắc ngay trong ứng dụng & bạn có thể tải Lịch (.ics).';
+          } else {
+            permMsg = 'Đã bật nhắc trong ứng dụng (trình duyệt chưa cấp Notification API).';
+          }
+        } else {
+          permMsg = 'Đã lưu cấu hình (tạm tắt nhắc tự động).';
+        }
+
+        REMINDERS.saveReminderConfig({
+          enabled: wantsEnabled,
+          timingMode: modeEl ? modeEl.value : 'adaptive',
+          fixedTime: fixedEl ? fixedEl.value : '20:00',
+          frequency: freqEl ? freqEl.value : 'once',
+          snoozedUntil: null
+        });
+
+        renderReminderModalData();
+        renderCards();
+        setRemStatus('success', `✅ ${permMsg}`);
+      });
+    }
+
+    const btnTest = document.getElementById('btnTestReminder');
+    if (btnTest && REMINDERS) {
+      btnTest.addEventListener('click', async () => {
+        const perm = await REMINDERS.requestNotificationPermission();
+        const snapshots = getSnapshots();
+        const activity = readActivity ? readActivity() : {};
+        const streakStats = computeStreak ? computeStreak(activity) : {};
+        const rec = REMINDERS.buildSmartRecommendation(snapshots, streakStats, activity);
+
+        showStudyNudgeToast(rec);
+        const sentOs = perm === 'granted' ? await REMINDERS.sendBrowserNotification(rec) : false;
+        renderReminderModalData();
+        setRemStatus(
+          sentOs ? 'success' : 'info',
+          sentOs
+            ? '🔔 Đã gửi thông báo hệ thống + hiển thị gợi ý mẫu!'
+            : '💡 Đã hiển thị gợi ý mẫu ở góc dưới màn hình (cấp quyền thông báo trình duyệt để hiện cả ngoài màn hình khóa).'
+        );
+      });
+    }
+
+    const btnIcs = document.getElementById('btnDownloadIcs');
+    if (btnIcs && REMINDERS) {
+      btnIcs.addEventListener('click', () => {
+        const cfg = REMINDERS.loadReminderConfig();
+        const snapshots = getSnapshots();
+        const activity = readActivity ? readActivity() : {};
+        const streakStats = computeStreak ? computeStreak(activity) : {};
+        const rec = REMINDERS.buildSmartRecommendation(snapshots, streakStats, activity);
+        const portalUrl = `${window.location.origin}${window.location.pathname}`;
+        const icsText = REMINDERS.generateCalendarIcs(cfg, rec, portalUrl, activity);
+
+        const blob = new Blob([icsText], { type: 'text/calendar;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'KHYS_2026_Nhac_On_Tap.ics';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        setRemStatus('success', '📅 Đã tải file lịch nhắc KHYS_2026_Nhac_On_Tap.ics — mở file để thêm vào Google Calendar / Apple Calendar!');
+      });
+    }
+
+    const btnCloseNudge = document.getElementById('btnCloseNudge');
+    const btnSnooze = document.getElementById('btnSnoozeNudge');
+    const nudgeEl = document.getElementById('studyNudgeToast');
+    if (btnCloseNudge && nudgeEl) {
+      btnCloseNudge.addEventListener('click', () => nudgeEl.classList.add('hidden'));
+    }
+    if (btnSnooze && nudgeEl && REMINDERS) {
+      btnSnooze.addEventListener('click', () => {
+        const oneHourLater = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+        REMINDERS.saveReminderConfig({ snoozedUntil: oneHourLater });
+        nudgeEl.classList.add('hidden');
+      });
+    }
+
+    setInterval(evaluateSmartReminders, 60000);
   }
 
   // ================= CROSS-DEVICE SYNC MODAL CONTROLLER =================
@@ -840,6 +1100,7 @@
     renderCards();
     bindEvents();
     checkIncomingHashSync();
+    setTimeout(evaluateSmartReminders, 1500);
   }
 
   if (document.readyState === 'loading') {

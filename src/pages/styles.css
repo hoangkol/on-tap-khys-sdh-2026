@@ -227,6 +227,31 @@ code {
   color: #047857;
 }
 
+.btn-reminder {
+  position: relative;
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.42);
+  color: #b45309;
+}
+
+.btn-reminder:hover {
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.2);
+}
+
+[data-theme="dark"] .btn-reminder {
+  color: #fcd34d;
+  background: rgba(245, 158, 11, 0.16);
+}
+
+.reminder-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #f59e0b;
+  box-shadow: 0 0 0 2px var(--bg-card);
+}
+
 .btn-sync-device:hover {
   border-color: #10b981;
   background: rgba(16, 185, 129, 0.18);
@@ -659,8 +684,208 @@ code {
   gap: 10px;
 }
 
+.exposure-chip {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+.rem-stats-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.rem-mini-stat {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.rem-mini-stat span {
+  font-size: 11.5px;
+  color: var(--text-light);
+  font-weight: 600;
+}
+
+.rem-mini-stat strong {
+  font-size: 12.8px;
+  color: var(--text-main);
+}
+
+.rem-preview-card {
+  background: var(--primary-soft);
+  border: 1px solid rgba(2, 132, 199, 0.28);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rem-preview-badge {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--primary);
+}
+
+.rem-preview-card h3 {
+  font-size: 0.98rem;
+  font-weight: 800;
+  color: var(--text-main);
+}
+
+.rem-reasons-list {
+  margin: 4px 0 0 18px;
+  font-size: 12.2px;
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.rem-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 48px;
+  height: 27px;
+  flex-shrink: 0;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: #cbd5e1;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.toggle-slider::before {
+  content: "";
+  position: absolute;
+  width: 21px;
+  height: 21px;
+  left: 3px;
+  top: 3px;
+  border-radius: 999px;
+  background: #ffffff;
+  transition: transform 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background: #10b981;
+}
+
+.toggle-switch input:checked + .toggle-slider::before {
+  transform: translateX(21px);
+}
+
+[data-theme="dark"] .toggle-slider {
+  background: #334155;
+}
+
+.rem-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.rem-form-grid select,
+.rem-form-grid input[type="time"] {
+  min-height: 38px;
+  padding: 7px 11px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-main);
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.rem-field-muted {
+  opacity: 0.55;
+}
+
+.study-nudge-toast {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 115;
+  width: min(370px, calc(100vw - 28px));
+  background: var(--bg-card);
+  color: var(--text-main);
+  border: 1px solid var(--primary);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.nudge-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.nudge-badge {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--primary);
+}
+
+.nudge-close {
+  border: 0;
+  background: transparent;
+  color: var(--text-light);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.nudge-body {
+  font-size: 12.8px;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.nudge-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 @media (max-width: 720px) {
-  .sync-two-col {
+  .sync-two-col,
+  .rem-stats-strip,
+  .rem-form-grid {
     grid-template-columns: 1fr;
   }
 }

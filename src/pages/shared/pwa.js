@@ -251,6 +251,25 @@
     }
   }
 
+  function detectActiveSubjectSlug() {
+    const pathName = (window.location && window.location.pathname) || '';
+    const slugs = [
+      'sinh-ly-benh-mien-dich',
+      'giai-phau-benh',
+      'ky-sinh-trung',
+      'giai-phau',
+      'sinh-ly',
+      'mo-hoc',
+      'vi-sinh'
+    ];
+    for (let i = 0; i < slugs.length; i += 1) {
+      if (pathName.includes(`/${slugs[i]}/`) || pathName.endsWith(`/${slugs[i]}`)) {
+        return slugs[i];
+      }
+    }
+    return null;
+  }
+
   function initActivityTracker() {
     if (window.__khysActivityHooked) return;
     window.__khysActivityHooked = true;
@@ -273,12 +292,22 @@
             return {
               days: parsed.days && typeof parsed.days === 'object' ? parsed.days : {},
               dailyGoal: Number(parsed.dailyGoal || 20),
-              lastSnapshots: parsed.lastSnapshots && typeof parsed.lastSnapshots === 'object' ? parsed.lastSnapshots : {}
+              dailyMinutesGoal: Number(parsed.dailyMinutesGoal || 30),
+              lastSnapshots: parsed.lastSnapshots && typeof parsed.lastSnapshots === 'object' ? parsed.lastSnapshots : {},
+              subjectExposure: parsed.subjectExposure && typeof parsed.subjectExposure === 'object' ? parsed.subjectExposure : {},
+              preferredHours: parsed.preferredHours && typeof parsed.preferredHours === 'object' ? parsed.preferredHours : {}
             };
           }
         }
       } catch (e) {}
-      return { days: {}, dailyGoal: 20, lastSnapshots: {} };
+      return {
+        days: {},
+        dailyGoal: 20,
+        dailyMinutesGoal: 30,
+        lastSnapshots: {},
+        subjectExposure: {},
+        preferredHours: {}
+      };
     }
 
     function saveActivity(act) {
@@ -302,6 +331,108 @@
       if (changed) saveActivity(act);
     } catch (e) {}
 
+    // Track real active exposure time (requires visible tab + user activity within 90s)
+    const activeSlug = detectActiveSubjectSlug();
+    let lastInteractionAt = Date.now();
+    let lastTickAt = Date.now();
+
+    function markInteraction() {
+      lastInteractionAt = Date.now();
+    }
+
+    ['pointerdown', 'keydown', 'scroll', 'touchstart'].forEach((evt) => {
+      window.addEventListener(evt, markInteraction, { passive: true });
+    });
+
+    function flushStudyTime() {
+      try {
+        const now = Date.now();
+        if (document.visibilityState !== 'visible') {
+          lastTickAt = now;
+          return;
+        }
+        const idleMs = now - lastInteractionAt;
+        if (idleMs > 90000) {
+          lastTickAt = now;
+          return;
+        }
+        const elapsedSec = Math.min(60, Math.floor((now - lastTickAt) / 1000));
+        lastTickAt = now;
+        if (elapsedSec < 3) return;
+
+        const today = getTodayKey();
+        const hourKey = String(new Date().getHours());
+        const act = loadActivity();
+        if (!act.days[today]) {
+          act.days[today] = { answered: 0, correct: 0, studySeconds: 0, subjects: {}, subjectSeconds: {} };
+        }
+        act.days[today].studySeconds = Number(act.days[today].studySeconds || 0) + elapsedSec;
+        act.preferredHours[hourKey] = Number(act.preferredHours[hourKey] || 0) + elapsedSec;
+
+        if (activeSlug) {
+          if (!act.days[today].subjectSeconds || typeof act.days[today].subjectSeconds !== 'object') {
+            act.days[today].subjectSeconds = {};
+          }
+          act.days[today].subjectSeconds[activeSlug] = Number(act.days[today].subjectSeconds[activeSlug] || 0) + elapsedSec;
+
+          const prevExp = act.subjectExposure[activeSlug] || { totalSeconds: 0, lastStudiedAt: null };
+          act.subjectExposure[activeSlug] = {
+            totalSeconds: Number(prevExp.totalSeconds || 0) + elapsedSec,
+            lastStudiedAt: new Date().toISOString()
+          };
+        }
+        saveActivity(act);
+      } catch (e) {}
+    }
+
+    if (activeSlug) {
+      // Mark immediate touch when opening a subject page
+      try {
+        const act = loadActivity();
+        const prevExp = act.subjectExposure[activeSlug] || { totalSeconds: 0, lastStudiedAt: null };
+        act.subjectExposure[activeSlug] = {
+          totalSeconds: Number(prevExp.totalSeconds || 0),
+          lastStudiedAt: new Date().toISOString()
+        };
+        saveActivity(act);
+      } catch (e) {}
+    }
+
+    setInterval(flushStudyTime, 15000);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') {
+        flushStudyTime();
+      } else {
+        lastTickAt = Date.now();
+        lastInteractionAt = Date.now();
+      }
+    });
+    window.addEventListener('pagehide', flushStudyTime);
+
+    // Gentle 45-minute continuous study pacing reminder inside subject modules
+    if (activeSlug) {
+      let continuousActiveSec = 0;
+      let sessionNudgeShown = false;
+      setInterval(() => {
+        if (sessionNudgeShown || document.visibilityState !== 'visible') return;
+        if (Date.now() - lastInteractionAt > 90000) return;
+        continuousActiveSec += 15;
+        if (continuousActiveSec >= 45 * 60) {
+          sessionNudgeShown = true;
+          try {
+            if (document.getElementById('khysSessionNudgeToast')) return;
+            const toast = document.createElement('div');
+            toast.id = 'khysSessionNudgeToast';
+            toast.style.cssText = 'position:fixed;right:16px;bottom:76px;z-index:9999;max-width:330px;background:#0f172a;color:#f8fafc;border:1px solid rgba(56,189,248,0.45);border-radius:14px;padding:13px 15px;box-shadow:0 12px 30px rgba(0,0,0,0.32);font-family:Inter,system-ui,sans-serif;font-size:13px;line-height:1.45;';
+            toast.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:5px;"><strong style="color:#38bdf8;">🧠 Đã tập trung 45 phút</strong><button type="button" id="khysCloseSessionNudge" style="background:transparent;border:0;color:#94a3b8;font-size:15px;cursor:pointer;">✕</button></div><div>Bạn đang giữ nhịp độ rất tốt! Hãy nghỉ mắt 5 phút hoặc làm nhanh vài câu KSA để chốt kiến thức vừa đọc.</div>';
+            document.body.appendChild(toast);
+            const closeBtn = document.getElementById('khysCloseSessionNudge');
+            if (closeBtn) closeBtn.addEventListener('click', () => toast.remove());
+          } catch (e) {}
+        }
+      }, 15000);
+    }
+
     Storage.prototype.setItem = function (key, value) {
       nativeSetItem.call(this, key, value);
       try {
@@ -317,8 +448,9 @@
 
         if (deltaAnswered > 0) {
           const today = getTodayKey();
+          const hourKey = String(new Date().getHours());
           if (!act.days[today]) {
-            act.days[today] = { answered: 0, correct: 0, subjects: {} };
+            act.days[today] = { answered: 0, correct: 0, studySeconds: 0, subjects: {}, subjectSeconds: {} };
           }
           act.days[today].answered = Number(act.days[today].answered || 0) + deltaAnswered;
           act.days[today].correct = Number(act.days[today].correct || 0) + Math.min(deltaAnswered, deltaCorrect);
@@ -326,6 +458,13 @@
             act.days[today].subjects = {};
           }
           act.days[today].subjects[meta.slug] = Number(act.days[today].subjects[meta.slug] || 0) + deltaAnswered;
+
+          act.preferredHours[hourKey] = Number(act.preferredHours[hourKey] || 0) + deltaAnswered * 25;
+          const prevExp = act.subjectExposure[meta.slug] || { totalSeconds: 0, lastStudiedAt: null };
+          act.subjectExposure[meta.slug] = {
+            totalSeconds: Number(prevExp.totalSeconds || 0),
+            lastStudiedAt: new Date().toISOString()
+          };
         }
 
         act.lastSnapshots[meta.slug] = nextSnap;

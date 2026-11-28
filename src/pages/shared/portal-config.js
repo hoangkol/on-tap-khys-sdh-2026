@@ -193,6 +193,7 @@
 
   const ACTIVITY_STORAGE_KEY = 'yds_portal_activity_v1';
   const DEFAULT_DAILY_GOAL = 20;
+  const DEFAULT_MINUTES_GOAL = 30;
 
   function getLocalDateKey(dateInput) {
     const d = dateInput ? new Date(dateInput) : new Date();
@@ -293,7 +294,14 @@
 
   function readPortalActivity(storage) {
     const store = storage || (typeof global.localStorage !== 'undefined' ? global.localStorage : null);
-    const fallback = { days: {}, dailyGoal: DEFAULT_DAILY_GOAL, lastSnapshots: {} };
+    const fallback = {
+      days: {},
+      dailyGoal: DEFAULT_DAILY_GOAL,
+      dailyMinutesGoal: DEFAULT_MINUTES_GOAL,
+      lastSnapshots: {},
+      subjectExposure: {},
+      preferredHours: {}
+    };
     if (!store) return fallback;
     try {
       const raw = store.getItem(ACTIVITY_STORAGE_KEY);
@@ -301,10 +309,14 @@
       const parsed = JSON.parse(raw);
       if (!parsed || typeof parsed !== 'object') return fallback;
       const goal = Number(parsed.dailyGoal || DEFAULT_DAILY_GOAL);
+      const minGoal = Number(parsed.dailyMinutesGoal || DEFAULT_MINUTES_GOAL);
       return {
         days: parsed.days && typeof parsed.days === 'object' ? parsed.days : {},
         dailyGoal: Number.isFinite(goal) && goal >= 5 ? Math.min(200, Math.round(goal)) : DEFAULT_DAILY_GOAL,
-        lastSnapshots: parsed.lastSnapshots && typeof parsed.lastSnapshots === 'object' ? parsed.lastSnapshots : {}
+        dailyMinutesGoal: Number.isFinite(minGoal) && minGoal >= 5 ? Math.min(240, Math.round(minGoal)) : DEFAULT_MINUTES_GOAL,
+        lastSnapshots: parsed.lastSnapshots && typeof parsed.lastSnapshots === 'object' ? parsed.lastSnapshots : {},
+        subjectExposure: parsed.subjectExposure && typeof parsed.subjectExposure === 'object' ? parsed.subjectExposure : {},
+        preferredHours: parsed.preferredHours && typeof parsed.preferredHours === 'object' ? parsed.preferredHours : {}
       };
     } catch (e) {
       return fallback;
@@ -325,14 +337,31 @@
     return normalized;
   }
 
+  function setPortalMinutesGoal(minutes, storage) {
+    const store = storage || (typeof global.localStorage !== 'undefined' ? global.localStorage : null);
+    const normalized = Math.max(5, Math.min(240, Math.round(Number(minutes) || DEFAULT_MINUTES_GOAL)));
+    if (!store) return normalized;
+    const activity = readPortalActivity(store);
+    activity.dailyMinutesGoal = normalized;
+    try {
+      store.setItem(ACTIVITY_STORAGE_KEY, JSON.stringify(activity));
+    } catch (e) {
+      // Ignore storage quota errors
+    }
+    return normalized;
+  }
+
   function computeStreakStats(activity, todayOverride) {
-    const data = activity || { days: {}, dailyGoal: DEFAULT_DAILY_GOAL };
+    const data = activity || { days: {}, dailyGoal: DEFAULT_DAILY_GOAL, dailyMinutesGoal: DEFAULT_MINUTES_GOAL };
     const days = data.days || {};
     const todayKey = todayOverride || getLocalDateKey();
     const yesterdayKey = addDays(todayKey, -1);
 
     const activeDateKeys = Object.keys(days)
-      .filter((k) => /^\d{4}-\d{2}-\d{2}$/.test(k) && Number((days[k] && days[k].answered) || 0) > 0)
+      .filter((k) => {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(k) || !days[k]) return false;
+        return Number(days[k].answered || 0) > 0 || Number(days[k].studySeconds || 0) >= 60;
+      })
       .sort();
     const activeSet = new Set(activeDateKeys);
 
@@ -358,11 +387,14 @@
 
     const weekdayNames = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
     const last7Days = [];
+    let weekStudySeconds = 0;
     for (let offset = -6; offset <= 0; offset += 1) {
       const key = addDays(todayKey, offset);
       const entry = days[key] || {};
       const answered = Math.max(0, Number(entry.answered || 0));
       const correct = Math.min(answered, Math.max(0, Number(entry.correct || 0)));
+      const studySeconds = Math.max(0, Number(entry.studySeconds || 0));
+      weekStudySeconds += studySeconds;
       const [y, m, d] = key.split('-').map(Number);
       const dt = new Date(y, m - 1, d);
       last7Days.push({
@@ -371,6 +403,8 @@
         shortDate: `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}`,
         answered,
         correct,
+        studySeconds,
+        studyMinutes: Math.round(studySeconds / 60),
         accuracy: answered > 0 ? Math.round((correct / answered) * 100) : 0,
         isToday: offset === 0
       });
@@ -379,14 +413,22 @@
     const todayEntry = days[todayKey] || {};
     const todayAnswered = Math.max(0, Number(todayEntry.answered || 0));
     const todayCorrect = Math.min(todayAnswered, Math.max(0, Number(todayEntry.correct || 0)));
+    const todayStudySeconds = Math.max(0, Number(todayEntry.studySeconds || 0));
+    const todayStudyMinutes = Math.round(todayStudySeconds / 60);
     const dailyGoal = data.dailyGoal || DEFAULT_DAILY_GOAL;
+    const dailyMinutesGoal = data.dailyMinutesGoal || DEFAULT_MINUTES_GOAL;
 
     return {
       todayKey,
       todayAnswered,
       todayCorrect,
+      todayStudySeconds,
+      todayStudyMinutes,
+      weekStudyMinutes: Math.round(weekStudySeconds / 60),
       dailyGoal,
+      dailyMinutesGoal,
       goalPercent: Math.min(100, Math.round((todayAnswered / dailyGoal) * 100)),
+      minutesGoalPercent: Math.min(100, Math.round((todayStudyMinutes / dailyMinutesGoal) * 100)),
       currentStreak,
       bestStreak,
       activeDaysTotal: activeDateKeys.length,
@@ -399,5 +441,6 @@
   global.readSubjectProgress = readSubjectProgress;
   global.readPortalActivity = readPortalActivity;
   global.setPortalDailyGoal = setPortalDailyGoal;
+  global.setPortalMinutesGoal = setPortalMinutesGoal;
   global.computeStreakStats = computeStreakStats;
 })(typeof window !== 'undefined' ? window : globalThis);

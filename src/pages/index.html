@@ -33,6 +33,9 @@
         </div>
       </div>
       <div class="header-actions">
+        <button class="btn btn-reminder" id="btnOpenReminderModal" type="button" title="Cài đặt nhắc học thông minh theo tiến độ & thời gian tiếp xúc">
+          🔔 <span class="hide-xs">Nhắc học</span><span class="reminder-dot hidden" id="headerReminderDot" aria-hidden="true"></span>
+        </button>
         <button class="btn btn-sync-device" id="btnOpenSyncModal" type="button" title="Chuyển đổi nhanh tiến độ sang điện thoại hoặc máy tính khác">
           🔄 <span class="hide-xs">Chuyển thiết bị</span>
         </button>
@@ -107,6 +110,9 @@
           <p class="analytics-subtitle">Theo dõi biểu đồ 7 ngày gần nhất, độ chính xác từng môn và gợi ý trọng tâm ôn tiếp</p>
         </div>
         <div class="analytics-controls">
+          <button type="button" class="btn btn-outline btn-sm" id="btnOpenReminderFromPanel" title="Cài đặt nhắc học thông minh theo tiến độ & thời gian tiếp xúc">
+            🔔 Nhắc học
+          </button>
           <button type="button" class="btn btn-outline btn-sm" id="btnQuickSyncFromPanel" title="Xuất mã, link QR hoặc file để chuyển tiến độ sang thiết bị khác">
             🔄 Chuyển thiết bị
           </button>
@@ -291,8 +297,117 @@
     </div>
   </div>
 
+  <!-- MODAL NHẮC HỌC THÔNG MINH THEO TIẾN ĐỘ & THỜI GIAN TIẾP XÚC -->
+  <div class="sync-modal-backdrop hidden" id="reminderModalBackdrop" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="reminderModalTitle">
+    <div class="sync-modal-dialog reminder-modal-dialog">
+      <div class="sync-modal-header">
+        <div>
+          <h2 id="reminderModalTitle">🔔 Nhắc học thông minh theo tiến độ &amp; thời gian tiếp xúc</h2>
+          <p class="sync-modal-sub">Tự động phân tích bài chưa đạt chuẩn, môn lâu chưa ôn và khung giờ học hiệu quả của bạn</p>
+        </div>
+        <button type="button" class="pwa-modal-close" id="btnCloseReminderModal" aria-label="Đóng cài đặt nhắc học">✕</button>
+      </div>
+
+      <div class="sync-modal-body">
+        <div class="sync-status-banner hidden" id="remStatusBanner" role="status"></div>
+
+        <div class="rem-stats-strip" id="remStatsStrip">
+          <div class="rem-mini-stat">
+            <span>Quyền thông báo</span>
+            <strong id="remPermLabel">Chưa bật</strong>
+          </div>
+          <div class="rem-mini-stat">
+            <span>Giờ vàng học tập</span>
+            <strong id="remBestHourLabel">20:00 (Mặc định)</strong>
+          </div>
+          <div class="rem-mini-stat">
+            <span>Thời gian tiếp xúc</span>
+            <strong id="remExposureLabel">Hôm nay 0p • 7 ngày 0p</strong>
+          </div>
+        </div>
+
+        <div class="rem-preview-card" id="remPreviewCard">
+          <div class="rem-preview-badge">💡 Gợi ý thông minh ngay lúc này</div>
+          <h3 id="remPreviewHeadline">Đang phân tích tiến độ...</h3>
+          <p id="remPreviewBody" class="sync-hint"></p>
+          <ul class="rem-reasons-list" id="remPreviewReasons"></ul>
+        </div>
+
+        <div class="sync-box">
+          <div class="rem-switch-row">
+            <div>
+              <strong>Bật nhắc học tự động trong trình duyệt / PWA</strong>
+              <p class="sync-hint">Gửi thông báo kèm gợi ý môn cần ôn khi đến giờ hoặc khi bạn mở lại ứng dụng.</p>
+            </div>
+            <label class="toggle-switch" aria-label="Bật hoặc tắt nhắc học">
+              <input type="checkbox" id="remEnabledToggle" />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="rem-form-grid">
+            <label class="sync-field">
+              <span>Chế độ chọn giờ nhắc</span>
+              <select id="remTimingMode">
+                <option value="adaptive">🧠 Tự động theo giờ hay học nhất</option>
+                <option value="fixed">⏰ Cố định theo giờ tự chọn</option>
+              </select>
+            </label>
+
+            <label class="sync-field" id="remFixedTimeWrap">
+              <span>Giờ nhắc cố định</span>
+              <input type="time" id="remFixedTime" value="20:00" />
+            </label>
+
+            <label class="sync-field">
+              <span>Tần suất nhắc</span>
+              <select id="remFrequency">
+                <option value="once">1 lần / ngày (vào giờ vàng)</option>
+                <option value="twice">2 lần / ngày (08:30 sáng + giờ tối)</option>
+                <option value="smart3h">Nhắc thông minh mỗi 3 giờ khi chưa đạt mục tiêu</option>
+              </select>
+            </label>
+
+            <label class="sync-field">
+              <span>Mục tiêu thời gian tiếp xúc / ngày</span>
+              <select id="remMinutesGoal">
+                <option value="15">15 phút / ngày</option>
+                <option value="30" selected>30 phút / ngày</option>
+                <option value="45">45 phút / ngày</option>
+                <option value="60">60 phút / ngày</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="sync-btn-row">
+            <button type="button" class="btn btn-primary-solid" id="btnSaveReminder">🔔 Lưu &amp; Bật thông báo</button>
+            <button type="button" class="btn btn-outline" id="btnTestReminder">🧪 Gửi thử thông báo ngay</button>
+            <button type="button" class="btn btn-outline" id="btnDownloadIcs">📅 Thêm lịch nhắc (.ics)</button>
+          </div>
+          <p class="sync-hint">
+            💡 <strong>Mẹo hiệu quả 100%:</strong> Nếu bạn hay đóng hẳn trình duyệt/app, hãy bấm <strong>Thêm lịch nhắc (.ics)</strong> để Google Calendar / Lịch iPhone nhắc chuông đúng giờ mỗi ngày dù app đang tắt!
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- IN-APP SMART STUDY NUDGE TOAST -->
+  <aside class="study-nudge-toast hidden" id="studyNudgeToast" role="region" aria-label="Gợi ý nhắc học">
+    <div class="nudge-head">
+      <span class="nudge-badge" id="nudgeTitle">🔔 Gợi ý ôn tập</span>
+      <button type="button" class="nudge-close" id="btnCloseNudge" aria-label="Đóng thông báo">✕</button>
+    </div>
+    <p class="nudge-body" id="nudgeBody"></p>
+    <div class="nudge-actions">
+      <a class="btn btn-primary-solid btn-sm" id="nudgeCtaLink" href="./sinh-ly/">Vào ôn ngay →</a>
+      <button type="button" class="btn btn-outline btn-sm" id="btnSnoozeNudge">Nhắc lại sau 1 giờ</button>
+    </div>
+  </aside>
+
   <script src="./shared/portal-config.js"></script>
   <script src="./shared/portal-sync.js"></script>
+  <script src="./shared/portal-reminders.js"></script>
   <script src="./shared/pwa.js"></script>
   <script src="app.js"></script>
 </body>

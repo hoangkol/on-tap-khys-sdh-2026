@@ -228,11 +228,66 @@ async function main() {
   const homeRefs = checkLocalHtmlReferences(path.join(srcPagesDir, 'index.html'), srcPagesDir);
   assert.ok(homeRefs.includes('./shared/portal-config.js'));
   assert.ok(homeRefs.includes('./shared/portal-sync.js'));
+  assert.ok(homeRefs.includes('./shared/portal-reminders.js'));
   assert.ok(homeRefs.includes('./manifest.webmanifest'));
   assert.ok(homeRefs.includes('./shared/pwa.js'));
   assert.ok(homeRefs.includes('./icons/apple-touch-icon.png'));
   assert.ok(homeRefs.includes('./icons/logo.svg'));
   const manifest = checkPwaSetup(PORTAL_SUBJECTS);
+
+  // Verify PortalReminders recommendation, adaptive timing, trigger rules, and ICS output
+  const remCtx = {
+    window: {
+      PORTAL_SUBJECTS,
+      readSubjectProgress
+    },
+    Date,
+    Math
+  };
+  remCtx.window.window = remCtx.window;
+  vm.createContext(remCtx);
+  vm.runInContext(fs.readFileSync(path.join(srcPagesDir, 'shared', 'portal-reminders.js'), 'utf8'), remCtx);
+  const { PortalReminders } = remCtx.window;
+  assert.ok(PortalReminders, 'PortalReminders must be exposed on window');
+
+  const remActivity = {
+    dailyGoal: 20,
+    dailyMinutesGoal: 30,
+    preferredHours: { '21': 1200, '9': 180 },
+    subjectExposure: {
+      'giai-phau': { totalSeconds: 900, lastStudiedAt: '2026-11-23T10:00:00.000Z' }
+    }
+  };
+  const prefHour = PortalReminders.detectPreferredStudyHour(remActivity);
+  assert.equal(prefHour.hour, 21);
+  assert.equal(prefHour.isLearned, true);
+
+  const remSnapshots = PORTAL_SUBJECTS.map((s) => ({
+    subject: s,
+    progress: s.slug === 'giai-phau'
+      ? { completedLessons: 2, totalLessons: 7, answeredQuestions: 48, correctQuestions: 30, accuracy: 63, percent: 29, status: 'in-progress' }
+      : { completedLessons: 0, totalLessons: s.lessonsCount, answeredQuestions: 0, correctQuestions: 0, accuracy: 0, percent: 0, status: 'not-started' }
+  }));
+  const remStats = { todayKey: '2026-11-28', todayAnswered: 0, dailyGoal: 20, todayStudyMinutes: 0, dailyMinutesGoal: 30, currentStreak: 4 };
+  const recStreak = PortalReminders.buildSmartRecommendation(remSnapshots, remStats, remActivity, new Date('2026-11-28T21:10:00'));
+  assert.equal(recStreak.urgency, 'streak-risk');
+  assert.equal(recStreak.targetSlug, 'giai-phau');
+
+  const trig = PortalReminders.shouldTriggerReminder(
+    { enabled: true, timingMode: 'adaptive', frequency: 'once', lastNotifiedDate: null },
+    remStats,
+    remActivity,
+    new Date('2026-11-28T21:10:00')
+  );
+  assert.equal(trig.should, true);
+
+  const ics = PortalReminders.generateCalendarIcs(
+    { timingMode: 'adaptive', fixedTime: '20:00' },
+    recStreak,
+    'https://hoangkol.github.io/on-tap-khys-sdh-2026/',
+    remActivity
+  );
+  assert.ok(ics.includes('BEGIN:VCALENDAR') && ics.includes('RRULE:FREQ=DAILY') && ics.includes('BEGIN:VALARM'));
 
   // Verify PortalSync codec, merge, preview, and QR generation
   const syncCtx = {
